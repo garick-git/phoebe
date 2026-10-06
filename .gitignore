@@ -20,3 +20,6 @@ media/
 # Mac and editor
 .DS_Store
 .vscode/
+
+# Downloaded data
+data/
