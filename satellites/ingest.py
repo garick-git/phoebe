@@ -11,11 +11,20 @@ CELESTRAK_ACTIVE_URL = (
     "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json"
 )
 
+# Identifies Phoebe to CelesTrak so they can contact us if something goes wrong.
+USER_AGENT = "Phoebe/0.1 (satellite tracker; contact: garickmendez7@gmail.com)"
+
 
 def fetch_omm(url=CELESTRAK_ACTIVE_URL):
     """Download OMM records from CelesTrak and return them as a list of dicts."""
-    response = httpx.get(url, timeout=30)
-    response.raise_for_status()
+    response = httpx.get(url, timeout=30, headers={"User-Agent": USER_AGENT})
+    if response.is_error:
+        # CelesTrak explains refusals in the body, so surface it (capped in
+        # case the server sends back a long HTML error page).
+        raise RuntimeError(
+            f"CelesTrak returned {response.status_code} "
+            f"{response.reason_phrase}: {response.text[:500]}"
+        )
     return response.json()
 
 
