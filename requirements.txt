@@ -8,6 +8,8 @@ httpcore==1.0.9
 httpx==0.28.1
 idna==3.20
 iniconfig==2.3.0
+jplephem==2.24
+numpy==2.5.3
 packaging==26.3
 pluggy==1.6.0
 psycopg==3.3.6
@@ -15,5 +17,7 @@ psycopg-binary==3.3.6
 Pygments==2.21.0
 pytest==9.1.1
 pytest-django==4.14.0
+sgp4==2.27
+skyfield==1.55
 sqlparse==0.6.0
 typing_extensions==4.16.0
