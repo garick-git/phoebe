@@ -1,0 +1,5 @@
+# Plain HTTP on port 80 for now. Sunday: replace ":80" with the domain name
+# and Caddy will get and renew an HTTPS certificate on its own.
+:80 {
+	reverse_proxy web:8000
+}
