@@ -172,6 +172,12 @@ MAILERS = {
     },
 }
 
+# Phoebe sends no email (no accounts, no password resets; alerts go through
+# Sentry and CloudWatch), so the console backend above is deliberate. Django's
+# deploy check flags it as an error (mail.E001); silence only that check, and
+# revisit if email is ever added (pass alerts are parked).
+SILENCED_SYSTEM_CHECKS = ["mail.E001"]
+
 # Django REST Framework
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
