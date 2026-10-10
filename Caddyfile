@@ -1,7 +1,15 @@
-# Caddy gets and renews a free Let's Encrypt certificate for this name on its own.
-# Port 80 stays open: Caddy answers the certificate challenge there and redirects
-# plain-HTTP visitors to HTTPS. Caddy also tells Django the original scheme and
-# client address (X-Forwarded-Proto / X-Forwarded-For).
+{
+	# HTTP/3 needs UDP 443, which the firewall does not allow. HTTP/1.1 and
+	# HTTP/2 are plenty for this API.
+	servers {
+		protocols h1 h2
+	}
+}
+
+# Caddy gets and renews a free Let's Encrypt certificate for this name on its own
+# (it proves control of the name over port 443). Port 80 stays open only to
+# redirect plain-HTTP visitors to HTTPS. Caddy also tells Django the original
+# scheme and client address (X-Forwarded-Proto / X-Forwarded-For).
 phoebe-api.garickm.com {
 	reverse_proxy web:8000
 }

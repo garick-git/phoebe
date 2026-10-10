@@ -26,6 +26,37 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
 
+# The admin's URL prefix. Production sets a random one in its .env so bots that
+# probe /admin/ find nothing. That is obscurity, not a lock: the long random
+# password is the lock.
+ADMIN_PATH = (os.environ.get("DJANGO_ADMIN_PATH") or "admin/").strip("/") + "/"
+
+
+# HTTPS behind Caddy
+# Caddy ends TLS and talks plain HTTP to Gunicorn, adding X-Forwarded-Proto.
+# Trusting that header is only safe because the web container publishes no port,
+# so Caddy is the only thing that can reach Gunicorn, and Caddy overwrites any
+# value a client sends. Never publish the web container's port in production.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# HSTS tells browsers to use HTTPS only for this name, for this many seconds.
+# Django sends it only on requests it knows were HTTPS. Browsers cache it, so
+# production starts short (3600) and is raised once everything is verified.
+# Not set: includeSubDomains and preload (this is one hostname, not the apex).
+SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", "0"))
+
+# Cookies marked Secure are never sent over plain HTTP. Off in local development,
+# where the admin is reached over http://localhost.
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+
+# Origins (scheme included) allowed to submit forms such as the admin login.
+CSRF_TRUSTED_ORIGINS = [
+    origin
+    for origin in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin
+]
+
 
 # Application definition
 
@@ -145,4 +176,13 @@ MAILERS = {
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
+    # Rate limit per client IP. The counts live in each Gunicorn worker's own
+    # memory, so with 2 workers the real limit is up to about 2x this, and counts
+    # reset when the container restarts. Good enough to stop abuse, not exact.
+    "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.AnonRateThrottle"],
+    "DEFAULT_THROTTLE_RATES": {"anon": "60/min"},
+    # One proxy (Caddy) sits in front: take the client address from
+    # X-Forwarded-For. Without this every visitor would look like Caddy's IP
+    # and share one bucket.
+    "NUM_PROXIES": 1,
 }
