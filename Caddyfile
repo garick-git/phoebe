@@ -1,5 +1,7 @@
-# Plain HTTP on port 80 for now. Sunday: replace ":80" with the domain name
-# and Caddy will get and renew an HTTPS certificate on its own.
-:80 {
+# Caddy gets and renews a free Let's Encrypt certificate for this name on its own.
+# Port 80 stays open: Caddy answers the certificate challenge there and redirects
+# plain-HTTP visitors to HTTPS. Caddy also tells Django the original scheme and
+# client address (X-Forwarded-Proto / X-Forwarded-For).
+phoebe-api.garickm.com {
 	reverse_proxy web:8000
 }
