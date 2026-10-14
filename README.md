@@ -44,6 +44,21 @@ Satellite skywatching app: live 3D globe of active satellites, visible-pass pred
 
    The API is read-only and rate limited (60 requests a minute per client), locally too.
 
+## Run the front end locally
+
+**You need:** Node 24 (the version is pinned in `frontend/.nvmrc`; with nvm, run `nvm use` in `frontend/`).
+
+```
+cd frontend
+nvm use
+npm ci
+npm run dev
+```
+
+The app runs at http://localhost:3000. Other commands: `npm run build` (static export into `frontend/out/`), `npm run lint`.
+
+The front end is a Next.js static export: `next build` writes plain HTML, CSS and JavaScript, and no Next.js server runs in production. Everything dynamic comes from the Django API, called from the browser.
+
 ## Tests
 
 ```
@@ -57,6 +72,7 @@ pytest-django creates a separate test database for each run, so tests never touc
 - Never run `docker compose down -v`: `-v` deletes the database volume.
 - If `docker compose exec` says `service "web" is not running`, start the stack first (step 2).
 - The production server uses `compose.prod.yaml` (Caddy, Gunicorn, Postgres), not `compose.yaml`. See [docs/operations.md](docs/operations.md).
+- The front end is hosted on AWS Amplify; see [docs/operations.md](docs/operations.md#front-end-hosting-aws-amplify).
 
 ## Data sources
 

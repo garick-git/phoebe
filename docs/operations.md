@@ -1,6 +1,6 @@
 # Phoebe operations notes
 
-How the production back end is set up and kept running: shell access, deploys, scheduled jobs, backups and the restore procedure. Local development is in the [README](../README.md).
+How production is set up and kept running: the back end's shell access, deploys, scheduled jobs, backups and restore procedure, and the front end's hosting on AWS Amplify. Local development is in the [README](../README.md).
 
 Nothing secret belongs in this file. It never contains the bucket name, the AWS account ID, the admin path, or any value from a `.env` file.
 
@@ -116,6 +116,27 @@ This restores into a **new, empty scratch database on a laptop**, never into the
 **Result on 2026-10-13:** the dump `phoebe-20261013T083001Z.dump` (2,903,267 bytes) restored with no errors. Satellites (16,702), element sets (48,747) and the newest epoch matched production exactly.
 
 **Not yet rehearsed:** restoring onto a rebuilt server, or replacing the live database. Plan and test that before relying on it.
+
+## Front-end hosting (AWS Amplify)
+
+- **What:** the Next.js app in `frontend/` is a static export, hosted by **AWS Amplify Hosting** (us-east-2) on its CDN. There is no Next.js server and no compute charge.
+- **Build:** `amplify.yml` at the repo root (monorepo, `appRoot: frontend`): Node from `frontend/.nvmrc`, `npm ci`, `npm run build`, publish `frontend/out/`. A push to `main` triggers a build.
+- **Headers:** `customHttp.yml` at the repo root (HSTS, nosniff, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, `Permissions-Policy`). `next.config.ts` `headers()` does not apply to a static export.
+- **Console settings that are not in the repo:**
+  - Platform **`WEB`** with framework **`Next.js - SSG`**. Amplify auto-detects Next.js as SSR (`WEB_COMPUTE`), and the deploy then fails with `Can't find required-server-files.json in build output directory`. Fix from CloudShell:
+    ```
+    aws amplify update-app --app-id <app-id> --platform WEB --region us-east-2
+    aws amplify update-branch --app-id <app-id> --branch-name main --framework "Next.js - SSG" --region us-east-2
+    ```
+  - Environment variables: `AMPLIFY_MONOREPO_APP_ROOT=frontend` (must match `appRoot`) and `AMPLIFY_DIFF_DEPLOY=true`.
+  - **Rewrites and redirects: empty (`[]`).** Unknown URLs then get a real `404` status, but with an empty body, so the browser shows its own error page rather than Phoebe's `404.html`. Tested on 2026-10-14:
+    - The default rule for new apps (`/<*>` → `/index.html`, `404-200`) turned every unknown URL into the home page with status 200 (a "soft 404"). Removed.
+    - A `/<*>` → `/404.html` rule with status `404` (the custom 404 page example in AWS's docs) answered with a `302` redirect to `/404.html`, which then returned `200`. The same happened with `/404/index.html` as the target.
+    - Showing Phoebe's own 404 page with a real 404 status is parked for the Nov 2 UX and SEO pass.
+  - GitHub access: the Amplify GitHub App for us-east-2 is installed with **Only select repositories → phoebe**.
+  - No firewall (WAF): about $20 a month, and a static site has no server-side input for it to filter.
+- **Diff deploys:** with `AMPLIFY_DIFF_DEPLOY=true`, a commit that changes nothing under `frontend/` skips the build and deploy. That includes commits that only change `amplify.yml`. To force a full build: set the variable to `false`, choose **Redeploy this version** on the branch, then set it back to `true`.
+- **Check after a deploy:** `curl -sI <site>/tonight/` shows `200` and the five headers; `curl -sI <site>/nope-123/` shows `404` with no `location:` line (and no rewrite rules in the console).
 
 ## Gotchas
 
