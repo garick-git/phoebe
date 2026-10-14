@@ -1,0 +1,22 @@
+# Security headers for the front end on Amplify Hosting (brief 6b).
+# next.config.ts headers() doesn't apply to a static export, so they are set here.
+# A Content-Security-Policy is added on the Oct 31 checklist, once the globe and API calls exist.
+applications:
+  - appRoot: frontend
+    customHeaders:
+      - pattern: '**/*'
+        headers:
+          # HTTPS only. 1 hour to start (same as the API); raised to 1 year before launch.
+          - key: 'Strict-Transport-Security'
+            value: 'max-age=3600'
+          - key: 'X-Content-Type-Options'
+            value: 'nosniff'
+          # No other site may show Phoebe in a frame (clickjacking).
+          - key: 'X-Frame-Options'
+            value: 'DENY'
+          # Page URLs can hold a city or rounded coordinates: never send them to other sites.
+          - key: 'Referrer-Policy'
+            value: 'same-origin'
+          # Location only for Phoebe itself ("Use my location"); no camera or microphone.
+          - key: 'Permissions-Policy'
+            value: 'geolocation=(self), camera=(), microphone=()'
