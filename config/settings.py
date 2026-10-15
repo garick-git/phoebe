@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 import os
 from pathlib import Path
 
+from config.cors import parse_allowed_origins
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -57,6 +59,13 @@ CSRF_TRUSTED_ORIGINS = [
     if origin
 ]
 
+# Browser origins allowed to read the API (CORS; see config/cors.py). Exact
+# matches only, comma-separated: https://phoebe.garickm.com in production,
+# http://localhost:3000 for `npm run dev`. Empty means no cross-origin reads.
+CORS_ALLOWED_ORIGINS = parse_allowed_origins(
+    os.environ.get("DJANGO_CORS_ALLOWED_ORIGINS", "")
+)
+
 
 # Application definition
 
@@ -74,6 +83,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "config.cors.ApiCorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
