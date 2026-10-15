@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import GlobeLoader from "@/components/GlobeLoader";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, pageMetadata } from "@/lib/site";
 
 export const metadata: Metadata = pageMetadata({
@@ -10,7 +11,7 @@ export const metadata: Metadata = pageMetadata({
 
 const DETAIL_FIELDS = ["Name", "NORAD ID", "Category", "Altitude", "Speed", "Orbit period"];
 
-/** Globe (home). Placeholder until the 3D globe lands; the detail panel shows its layout. */
+/** Globe (home). The heading and panel are pre-rendered HTML; the 3D globe loads after them. */
 export default function GlobePage() {
   return (
     <div className="flex flex-1 flex-col lg:flex-row">
@@ -18,7 +19,9 @@ export default function GlobePage() {
         aria-labelledby="globe-heading"
         className="relative flex min-h-[60dvh] flex-1 items-center justify-center overflow-hidden"
       >
-        <div className="absolute left-4 top-4 max-w-sm">
+        <GlobeLoader />
+
+        <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-sm">
           <h1 id="globe-heading" className="text-2xl font-semibold tracking-tight">
             Every active satellite, live
           </h1>
@@ -26,16 +29,6 @@ export default function GlobePage() {
             Search, filter, and pick a satellite to see where it is and when you can see it.
           </p>
         </div>
-
-        {/* Placeholder sphere where the 3D globe will render. */}
-        <div
-          aria-hidden="true"
-          className="size-[min(70vw,26rem)] rounded-full bg-[radial-gradient(circle_at_35%_30%,#1d2c4f,#0b1222_60%,#070b14)] shadow-[0_0_80px_-10px_rgba(245,184,74,0.25)] ring-1 ring-line"
-        />
-
-        <p className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-dashed border-line px-4 py-1.5 text-xs text-muted">
-          Placeholder: the live 3D globe goes here
-        </p>
       </section>
 
       <aside

@@ -11,7 +11,9 @@
   "dependencies": {
     "next": "16.4.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "react-globe.gl": "2.38.0",
+    "satellite.js": "6.0.2"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
