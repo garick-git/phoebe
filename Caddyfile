@@ -11,5 +11,8 @@
 # redirect plain-HTTP visitors to HTTPS. Caddy also tells Django the original
 # scheme and client address (X-Forwarded-Proto / X-Forwarded-For).
 phoebe-api.garickm.com {
+	# Compress responses for browsers that accept it (zstd, else gzip). The
+	# globe's elements response shrinks from about 5 MB to about 1 MB.
+	encode zstd gzip
 	reverse_proxy web:8000
 }

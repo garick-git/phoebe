@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import httpx
 from django.db import transaction
+from django.utils import timezone as django_timezone
 
 from .models import OrbitalElementSet, Satellite
 
@@ -58,6 +59,9 @@ def ingest_records(records):
     """Upsert satellites and add any new element sets. Returns counts."""
     # One record per satellite, in case the feed ever repeats one.
     by_norad = {int(r["NORAD_CAT_ID"]): r for r in records}
+    # One timestamp for the whole run, so "in the latest feed" is an exact
+    # match on the newest last_seen_at (see SatelliteQuerySet.current).
+    seen_at = django_timezone.now()
 
     Satellite.objects.bulk_create(
         [
@@ -65,12 +69,18 @@ def ingest_records(records):
                 norad_cat_id=norad,
                 name=r["OBJECT_NAME"],
                 international_designator=r.get("OBJECT_ID") or "",
+                last_seen_at=seen_at,
             )
             for norad, r in by_norad.items()
         ],
         update_conflicts=True,
         unique_fields=["norad_cat_id"],
-        update_fields=["name", "international_designator", "updated_at"],
+        update_fields=[
+            "name",
+            "international_designator",
+            "updated_at",
+            "last_seen_at",
+        ],
         batch_size=1000,
     )
 

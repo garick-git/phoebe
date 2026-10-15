@@ -5,7 +5,12 @@ from .models import OrbitalElementSet, Satellite
 
 @admin.register(Satellite)
 class SatelliteAdmin(admin.ModelAdmin):
-    list_display = ["name", "norad_cat_id", "international_designator", "updated_at"]
+    list_display = [
+        "name",
+        "norad_cat_id",
+        "international_designator",
+        "last_seen_at",
+    ]
     search_fields = ["name", "norad_cat_id", "international_designator"]
 
 
