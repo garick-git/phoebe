@@ -8,10 +8,11 @@ Nothing secret belongs in this file. It never contains the bucket name, the AWS 
 
 - **One AWS EC2 server** (t4g.micro, Arm, 1 GB RAM plus a 2 GB swap file) in us-east-2, running Ubuntu Server 24.04 LTS with automatic security updates.
 - **Docker Compose** (`compose.prod.yaml`) runs three containers:
-  - `caddy`: the only container with published ports (80 and 443). It gets and renews the Let's Encrypt certificate and redirects HTTP to HTTPS.
+  - `caddy`: the only container with published ports (80 and 443). It gets and renews the Let's Encrypt certificate and redirects HTTP to HTTPS. It also compresses every response (`encode zstd gzip` in the `Caddyfile`), which shrinks the globe's elements response from about 5 MB to about 1 MB.
   - `web`: Django served by Gunicorn (2 workers). Static files are served by WhiteNoise and collected when the image is built.
   - `db`: PostgreSQL 18. Its data is in the named volume `postgres_data` and it is reachable only inside the Docker network.
 - **Public API:** https://phoebe-api.garickm.com/api/satellites/
+- **Front end:** https://phoebe.garickm.com (AWS Amplify, see below)
 - **Firewall (security group):** inbound 80 and 443 only. There is no SSH port and no key pair; shell access is through AWS Systems Manager Session Manager.
 - **Server role:** Session Manager access, plus an inline policy allowing upload (`s3:PutObject`) and list (`s3:ListBucket`) on the backup bucket only. It has no read or delete permission. Instance metadata requires IMDSv2 with a hop limit of 1, so only the host (not the containers) can use the role.
 
@@ -44,6 +45,14 @@ sudo docker compose -f compose.prod.yaml up -d --build --no-deps web
 
 That rebuilds and restarts only `web`; Postgres keeps running.
 
+- **The push includes a migration:** migrate *before* switching to the new code:
+  ```
+  cd ~/phoebe && git pull
+  sudo docker compose -f compose.prod.yaml build web
+  sudo docker compose -f compose.prod.yaml run --rm --no-deps web python manage.py migrate
+  sudo docker compose -f compose.prod.yaml up -d --no-deps web
+  ```
+  The old container keeps serving while the migration runs in a throw-away container from the new image. Starting the new code first would query columns that don't exist yet and return errors until `migrate` finished. This only works for additive migrations (for example a new nullable column), which the old code can ignore. Removing or renaming a column takes two deploys: stop using it first, remove it later.
 - **`Caddyfile` changed:** also run `sudo docker compose -f compose.prod.yaml restart caddy`. The file is mounted, so Compose doesn't notice the change.
 - **Only the server's `.env` changed:** run `sudo docker compose -f compose.prod.yaml up -d --no-deps --force-recreate web`. A container reads its environment only when it is created.
 - **Only a script in `scripts/` changed:** `git pull` is enough, because cron runs the file straight from the repo.
@@ -137,6 +146,23 @@ This restores into a **new, empty scratch database on a laptop**, never into the
   - No firewall (WAF): about $20 a month, and a static site has no server-side input for it to filter.
 - **Diff deploys:** with `AMPLIFY_DIFF_DEPLOY=true`, a commit that changes nothing under `frontend/` skips the build and deploy. That includes commits that only change `amplify.yml`. To force a full build: set the variable to `false`, choose **Redeploy this version** on the branch, then set it back to `true`.
 - **Check after a deploy:** `curl -sI <site>/tonight/` shows `200` and the five headers; `curl -sI <site>/nope-123/` shows `404` with no `location:` line (and no rewrite rules in the console).
+
+## Domains and DNS
+
+Both hostnames are subdomains of garickm.com, whose DNS is managed at Vercel.
+
+| Name | Type | Points to | Purpose |
+|---|---|---|---|
+| `phoebe-api` | A | The server's Elastic IP | The API. Caddy gets its certificate from Let's Encrypt. |
+| `phoebe` | CNAME | The `….cloudfront.net` target shown in Amplify → Custom domains | The front end on Amplify. |
+| `_<hash>` (on the root, **not** under `phoebe`) | CNAME | `_<hash>.acm-validations.aws` (from Amplify) | Proves to AWS Certificate Manager that we control the name. **Never delete it:** the free certificate renews about every 13 months only while this record exists. If it's lost, remove the domain in Amplify and add it again. |
+| Root (name blank) | CAA | `0 issue "amazon.com"` | Allows Amazon's certificate authority to issue for garickm.com names. Without it, Amplify's certificate can't be issued or renewed. **Keep it.** |
+
+- **CAA records** list which certificate authorities may issue certificates for a domain; a name with no CAA of its own inherits its parent's. Vercel also manages three locked CAA rows on the root (`letsencrypt.org`, `sectigo.com`, `pki.goog`). Never remove Let's Encrypt: Caddy needs it.
+- The CAA row has to go on the root, because `phoebe` holds a CNAME, and a CNAME can't share its name with any other record.
+- The zone also has a locked wildcard `*` record pointing at Vercel. Explicit records always win over it.
+- Amplify's custom-domain settings: domain `garickm.com` with the root **excluded**, only the `phoebe` subdomain mapped to `main`, and an **Amplify managed certificate** (free).
+- **Check:** `dig +short phoebe.garickm.com` (CloudFront addresses), `dig +short phoebe-api.garickm.com` (the Elastic IP), `dig +short CAA garickm.com` (four rows, including `amazon.com`).
 
 ## Gotchas
 

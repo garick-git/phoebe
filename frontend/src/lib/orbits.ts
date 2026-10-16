@@ -76,6 +76,21 @@ export function trackSatellites(rows: ElementSetRow[]): TrackedSatellite[] {
   return tracked;
 }
 
+/** One satellite's position at `date`, or null if SGP4 can't propagate it. */
+function geodeticAt(satrec: SatRec, date: Date, gmst: number) {
+  // No result (or, in older satellite.js versions, `false`) means SGP4
+  // couldn't propagate this satellite to this time.
+  const position = propagate(satrec, date)?.position;
+  if (!position || typeof position !== "object") return null;
+  const geo = eciToGeodetic(position, gmst);
+  if (!Number.isFinite(geo.height) || geo.height < 0) return null;
+  return {
+    lat: degreesLat(geo.latitude),
+    lng: degreesLong(geo.longitude),
+    altitudeKm: geo.height,
+  };
+}
+
 /**
  * Where every satellite is at `date`. Satellites SGP4 can't propagate (for
  * example ones that have decayed since their element set) are left out.
@@ -86,19 +101,30 @@ export function positionsAt(satellites: TrackedSatellite[], date: Date): Satelli
   const gmst = gstime(date);
   const positions: SatellitePosition[] = [];
   for (const { noradId, name, satrec } of satellites) {
-    // No result (or, in older satellite.js versions, `false`) means SGP4
-    // couldn't propagate this satellite to this time.
-    const position = propagate(satrec, date)?.position;
-    if (!position || typeof position !== "object") continue;
-    const geo = eciToGeodetic(position, gmst);
-    if (!Number.isFinite(geo.height) || geo.height < 0) continue;
-    positions.push({
-      noradId,
-      name,
-      lat: degreesLat(geo.latitude),
-      lng: degreesLong(geo.longitude),
-      altitudeKm: geo.height,
-    });
+    const geo = geodeticAt(satrec, date, gmst);
+    if (geo) positions.push({ noradId, name, ...geo });
   }
   return positions;
+}
+
+/** Numbers per satellite in a packed buffer: latitude, longitude, altitude (km). */
+export const PACKED_STRIDE = 3;
+
+/**
+ * The same positions packed into one Float32Array, in `satellites` order
+ * (satellite i is at index i * PACKED_STRIDE). A Web Worker can hand this to
+ * the page without copying it. Satellites SGP4 can't propagate get NaN.
+ * Float32 keeps about 7 significant digits: about 1 m of latitude/longitude.
+ */
+export function packedPositionsAt(satellites: TrackedSatellite[], date: Date): Float32Array {
+  const gmst = gstime(date);
+  const packed = new Float32Array(satellites.length * PACKED_STRIDE);
+  for (let i = 0; i < satellites.length; i++) {
+    const geo = geodeticAt(satellites[i].satrec, date, gmst);
+    const at = i * PACKED_STRIDE;
+    packed[at] = geo ? geo.lat : NaN;
+    packed[at + 1] = geo ? geo.lng : NaN;
+    packed[at + 2] = geo ? geo.altitudeKm : NaN;
+  }
+  return packed;
 }
