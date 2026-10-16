@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Globe, { type GlobeMethods } from "react-globe.gl";
 
+import CategoryFilter from "@/components/CategoryFilter";
 import SatelliteSearch from "@/components/SatelliteSearch";
 import { PauseIcon, PlayIcon } from "@/components/icons";
 import { API_BASE_URL } from "@/lib/api";
+import { CATEGORIES, categorizeAll } from "@/lib/categories";
 import {
   EARTH_RADIUS_KM,
   PACKED_STRIDE,
@@ -28,7 +30,14 @@ type LoadState =
       at: Date;
     };
 
-type Catalog = { noradIds: number[]; names: string[] };
+type Catalog = {
+  noradIds: number[];
+  names: string[];
+  categories: Uint8Array; // category (an index into CATEGORIES) per catalog index
+};
+
+/** The filter value that shows every satellite. */
+const ALL = -1;
 
 // A low-orbit satellite moves about 0.2 px a second at the starting view, so
 // one update a second looks smooth and leaves the CPU almost idle.
@@ -73,9 +82,15 @@ function prefersReducedMotion() {
 const timeFormat: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
 
 /** Refill `positions` from the worker's packed buffer (the objects the layer reads). */
-function unpackInto(positions: SatellitePosition[], catalog: Catalog, packed: Float32Array) {
+function unpackInto(
+  positions: SatellitePosition[],
+  catalog: Catalog,
+  packed: Float32Array,
+  filter: number,
+) {
   positions.length = 0;
   for (let i = 0; i < catalog.noradIds.length; i++) {
+    if (filter !== ALL && catalog.categories[i] !== filter) continue;
     const at = i * PACKED_STRIDE;
     if (Number.isNaN(packed[at])) continue; // SGP4 couldn't propagate it
     positions.push({
@@ -103,6 +118,13 @@ export default function SatelliteGlobe() {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [searchIndex, setSearchIndex] = useState<SearchIndex | null>(null);
   const [selected, setSelected] = useState<SearchResult | null>(null);
+  // Category filter: an index into CATEGORIES, or ALL. The ref lets the worker's
+  // message handler (created once) read the current value.
+  const [filter, setFilter] = useState(ALL);
+  const filterRef = useRef(ALL);
+  const [counts, setCounts] = useState<number[] | null>(null);
+  // The last positions received, so a filter change can redraw while paused.
+  const latestRef = useRef<{ packed: Float32Array; time: number } | null>(null);
   // The slot is in the page's pre-rendered HTML, so it exists before this
   // client-only component first renders.
   const [searchSlot] = useState(() => document.getElementById(GLOBE_SEARCH_SLOT_ID));
@@ -131,6 +153,28 @@ export default function SatelliteGlobe() {
     worker.postMessage({ type: "compute", time: Date.now() } satisfies ToWorker);
   }, []);
 
+  /** Turn a packed buffer into the layer's data, keeping only the current filter's satellites. */
+  const publish = useCallback((packed: Float32Array, time: number) => {
+    const catalog = catalogRef.current;
+    if (!catalog) return;
+    latestRef.current = { packed, time };
+    const set = particleSetRef.current;
+    unpackInto(set, catalog, packed, filterRef.current);
+    // A new outer array tells react-globe.gl the layer changed. Keeping the
+    // same inner set makes three-globe update its existing point cloud
+    // instead of replacing it: replacing it disposed the material, so
+    // three.js deleted and recompiled the shader program on every update
+    // (measured in a profile: long tasks up to 365 ms; none after this).
+    // A filter change only changes how many entries the set holds.
+    setState({
+      kind: "ready",
+      particleSets: [set],
+      packed,
+      count: set.length,
+      at: new Date(time),
+    });
+  }, []);
+
   // Start the worker. It downloads the elements and runs SGP4 off the main
   // thread; this side only turns its buffer into layer data.
   useEffect(() => {
@@ -147,27 +191,18 @@ export default function SatelliteGlobe() {
       if (message.type === "error") {
         setState({ kind: "error" });
       } else if (message.type === "loaded") {
-        catalogRef.current = { noradIds: message.noradIds, names: message.names };
+        const { byIndex, counts: categoryCounts } = categorizeAll(message.noradIds, message.names);
+        catalogRef.current = {
+          noradIds: message.noradIds,
+          names: message.names,
+          categories: byIndex,
+        };
+        setCounts(categoryCounts);
         setSearchIndex(buildSearchIndex(message.noradIds, message.names));
         requestPositions(); // first positions, even when starting paused
       } else if (message.type === "positions") {
         inFlightRef.current = false;
-        const catalog = catalogRef.current;
-        if (!catalog) return;
-        const set = particleSetRef.current;
-        unpackInto(set, catalog, message.positions);
-        // A new outer array tells react-globe.gl the layer changed. Keeping the
-        // same inner set makes three-globe update its existing point cloud
-        // instead of replacing it: replacing it disposed the material, so
-        // three.js deleted and recompiled the shader program on every update
-        // (measured in a profile: long tasks up to 365 ms; none after this).
-        setState({
-          kind: "ready",
-          particleSets: [set],
-          packed: message.positions,
-          count: set.length,
-          at: new Date(message.time),
-        });
+        publish(message.positions, message.time);
       }
     };
     // The worker script itself failed (for example it couldn't be downloaded).
@@ -182,7 +217,7 @@ export default function SatelliteGlobe() {
       worker.terminate();
       workerRef.current = null;
     };
-  }, [requestPositions]);
+  }, [requestPositions, publish]);
 
   // Stop updating while the tab is hidden: nobody can see it, and it saves battery.
   useEffect(() => {
@@ -222,6 +257,14 @@ export default function SatelliteGlobe() {
     [markerPosition],
   );
 
+  /** Show one category (or ALL). Re-filters the last positions, so it works while paused too. */
+  function changeFilter(next: number) {
+    filterRef.current = next;
+    setFilter(next);
+    const latest = latestRef.current;
+    if (latest) publish(latest.packed, latest.time);
+  }
+
   /** Highlight a search result and turn the camera to it. */
   function select(result: SearchResult) {
     setSelected(result);
@@ -246,6 +289,8 @@ export default function SatelliteGlobe() {
   }, [hasSize]);
 
   const count = state.kind === "ready" ? state.count : 0;
+  const total = counts ? counts.reduce((sum, n) => sum + n, 0) : 0;
+  const categoryLabel = filter === ALL ? null : CATEGORIES[filter].label;
 
   return (
     <div ref={containerRef} className="absolute inset-0">
@@ -255,6 +300,7 @@ export default function SatelliteGlobe() {
           aria-label={
             state.kind === "ready"
               ? `3D globe showing ${count.toLocaleString()} active satellites at their current positions` +
+                (categoryLabel ? ` in the ${categoryLabel} category` : "") +
                 (selected && hasMarker ? `, with ${selected.name} highlighted` : "")
               : "3D globe"
           }
@@ -273,7 +319,9 @@ export default function SatelliteGlobe() {
             particleLat="lat"
             particleLng="lng"
             particleAltitude={particleAltitude}
-            particlesSize={2}
+            // A short list (for example 9 stations) is easier to see and
+            // click with bigger dots; 16,000 dots need to stay small.
+            particlesSize={count <= 500 ? 5 : 2}
             particlesSizeAttenuation={false}
             particlesColor={particleColor}
             htmlElementsData={markerData}
@@ -290,12 +338,15 @@ export default function SatelliteGlobe() {
       {searchSlot &&
         searchIndex &&
         createPortal(
-          <SatelliteSearch
-            index={searchIndex}
-            selection={selected && { name: selected.name, onGlobe: hasMarker }}
-            onSelect={select}
-            onClear={() => setSelected(null)}
-          />,
+          <>
+            <SatelliteSearch
+              index={searchIndex}
+              selection={selected && { name: selected.name, onGlobe: hasMarker }}
+              onSelect={select}
+              onClear={() => setSelected(null)}
+            />
+            {counts && <CategoryFilter counts={counts} value={filter} onChange={changeFilter} />}
+          </>,
           searchSlot,
         )}
 
@@ -309,9 +360,10 @@ export default function SatelliteGlobe() {
           {state.kind === "loading" && "Loading satellites…"}
           {state.kind === "error" && "Couldn't load satellites. Please try again later."}
           {state.kind === "ready" &&
-            (playing
-              ? `${count.toLocaleString()} satellites · live`
-              : `${count.toLocaleString()} satellites · paused at ${state.at.toLocaleTimeString([], timeFormat)}`)}
+            (categoryLabel
+              ? `${count.toLocaleString()} of ${total.toLocaleString()} satellites · ${categoryLabel}`
+              : `${count.toLocaleString()} satellites`) +
+              ` · ${playing ? "live" : `paused at ${state.at.toLocaleTimeString([], timeFormat)}`}`}
         </p>
 
         {state.kind === "ready" && (
