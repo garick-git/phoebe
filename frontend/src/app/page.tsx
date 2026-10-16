@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import GlobeLoader from "@/components/GlobeLoader";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, pageMetadata } from "@/lib/site";
+import {
+  GLOBE_SEARCH_SLOT_ID,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TAGLINE,
+  pageMetadata,
+} from "@/lib/site";
 
 export const metadata: Metadata = pageMetadata({
   title: `${SITE_NAME} · ${SITE_TAGLINE}`,
@@ -21,13 +27,17 @@ export default function GlobePage() {
       >
         <GlobeLoader />
 
-        <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-sm">
-          <h1 id="globe-heading" className="text-2xl font-semibold tracking-tight">
-            Every active satellite, live
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            Search, filter, and pick a satellite to see where it is and when you can see it.
-          </p>
+        <div className="pointer-events-none absolute inset-x-4 top-4 z-10 flex flex-col gap-3 sm:right-auto sm:w-96">
+          <div>
+            <h1 id="globe-heading" className="text-2xl font-semibold tracking-tight">
+              Every active satellite, live
+            </h1>
+            <p className="mt-1 text-sm text-muted">
+              Search, filter, and pick a satellite to see where it is and when you can see it.
+            </p>
+          </div>
+          {/* The globe renders its search box here once its data has loaded. */}
+          <div id={GLOBE_SEARCH_SLOT_ID} className="pointer-events-auto empty:hidden" />
         </div>
       </section>
 

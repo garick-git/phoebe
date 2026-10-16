@@ -1,17 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Globe, { type GlobeMethods } from "react-globe.gl";
 
+import SatelliteSearch from "@/components/SatelliteSearch";
 import { PauseIcon, PlayIcon } from "@/components/icons";
 import { API_BASE_URL } from "@/lib/api";
-import { EARTH_RADIUS_KM, PACKED_STRIDE, type SatellitePosition } from "@/lib/orbits";
+import {
+  EARTH_RADIUS_KM,
+  PACKED_STRIDE,
+  packedPositionAt,
+  type SatellitePosition,
+} from "@/lib/orbits";
+import { buildSearchIndex, type SearchIndex, type SearchResult } from "@/lib/search";
+import { GLOBE_SEARCH_SLOT_ID } from "@/lib/site";
 import type { FromWorker, ToWorker } from "@/workers/positions-messages";
 
 type LoadState =
   | { kind: "loading" }
   | { kind: "error" }
-  | { kind: "ready"; particleSets: SatellitePosition[][]; count: number; at: Date };
+  | {
+      kind: "ready";
+      particleSets: SatellitePosition[][];
+      packed: Float32Array; // the same positions, by catalog index (for the marker)
+      count: number;
+      at: Date;
+    };
 
 type Catalog = { noradIds: number[]; names: string[] };
 
@@ -28,6 +43,32 @@ const particleColor = () => "#f5b84a"; // theme accent (amber)
 const START_VIEW = { lat: 30, lng: -97, altitude: 3 };
 
 const NO_PARTICLES: SatellitePosition[][] = [];
+const NO_MARKERS: SearchResult[] = [];
+
+/**
+ * The highlight marker: a ring on the satellite plus its name. Built with DOM
+ * calls because globe.gl positions a real element; the name goes in with
+ * textContent (never innerHTML), because it comes from an outside data feed.
+ * Hidden from screen readers: the search box announces the selection.
+ */
+function markerElement(d: object) {
+  const root = document.createElement("div");
+  root.setAttribute("aria-hidden", "true");
+  root.className = "pointer-events-none relative size-7";
+  const ring = document.createElement("span");
+  ring.className =
+    "absolute inset-0 rounded-full border-2 border-ink shadow-[0_0_0_2px_rgba(7,11,20,0.85)]";
+  const label = document.createElement("span");
+  label.className =
+    "absolute left-full top-1/2 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-line bg-bg/90 px-2 py-0.5 text-xs font-medium text-ink";
+  label.textContent = (d as SearchResult).name;
+  root.append(ring, label);
+  return root;
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
 
 const timeFormat: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
 
@@ -60,12 +101,14 @@ export default function SatelliteGlobe() {
 
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [state, setState] = useState<LoadState>({ kind: "loading" });
-  const [catalogReady, setCatalogReady] = useState(false);
+  const [searchIndex, setSearchIndex] = useState<SearchIndex | null>(null);
+  const [selected, setSelected] = useState<SearchResult | null>(null);
+  // The slot is in the page's pre-rendered HTML, so it exists before this
+  // client-only component first renders.
+  const [searchSlot] = useState(() => document.getElementById(GLOBE_SEARCH_SLOT_ID));
   // WCAG 2.2.2 (Pause, Stop, Hide): moving content needs a pause control.
   // People who ask their system for reduced motion start paused.
-  const [playing, setPlaying] = useState(
-    () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
+  const [playing, setPlaying] = useState(() => !prefersReducedMotion());
   const [pageVisible, setPageVisible] = useState(() => document.visibilityState === "visible");
 
   // The globe draws a canvas of a fixed pixel size; keep it matched to its box.
@@ -105,7 +148,7 @@ export default function SatelliteGlobe() {
         setState({ kind: "error" });
       } else if (message.type === "loaded") {
         catalogRef.current = { noradIds: message.noradIds, names: message.names };
-        setCatalogReady(true);
+        setSearchIndex(buildSearchIndex(message.noradIds, message.names));
         requestPositions(); // first positions, even when starting paused
       } else if (message.type === "positions") {
         inFlightRef.current = false;
@@ -118,7 +161,13 @@ export default function SatelliteGlobe() {
         // instead of replacing it: replacing it disposed the material, so
         // three.js deleted and recompiled the shader program on every update
         // (measured in a profile: long tasks up to 365 ms; none after this).
-        setState({ kind: "ready", particleSets: [set], count: set.length, at: new Date(message.time) });
+        setState({
+          kind: "ready",
+          particleSets: [set],
+          packed: message.positions,
+          count: set.length,
+          at: new Date(message.time),
+        });
       }
     };
     // The worker script itself failed (for example it couldn't be downloaded).
@@ -144,13 +193,50 @@ export default function SatelliteGlobe() {
 
   // The update loop. Runs only while playing, visible, and loaded; catches up
   // straight away when any of those becomes true again.
-  const live = playing && pageVisible && catalogReady;
+  const live = playing && pageVisible && searchIndex !== null;
   useEffect(() => {
     if (!live) return;
     requestPositions();
     const id = window.setInterval(requestPositions, UPDATE_INTERVAL_MS);
     return () => window.clearInterval(id);
   }, [live, requestPositions]);
+
+  // The highlighted satellite's current position (null if SGP4 has none).
+  const packed = state.kind === "ready" ? state.packed : null;
+  const markerPosition = useMemo(
+    () => (selected && packed ? packedPositionAt(packed, selected.index) : null),
+    [selected, packed],
+  );
+  // The marker's data object changes only when the selection does: the HTML
+  // layer keeps one DOM element per object, so a new object every second
+  // would rebuild the element. New positions arrive through the accessors.
+  const hasMarker = markerPosition !== null;
+  const markerData = useMemo(
+    () => (selected && hasMarker ? [selected] : NO_MARKERS),
+    [selected, hasMarker],
+  );
+  const markerLat = useCallback(() => markerPosition?.lat ?? 0, [markerPosition]);
+  const markerLng = useCallback(() => markerPosition?.lng ?? 0, [markerPosition]);
+  const markerAltitude = useCallback(
+    () => (markerPosition?.altitudeKm ?? 0) / EARTH_RADIUS_KM,
+    [markerPosition],
+  );
+
+  /** Highlight a search result and turn the camera to it. */
+  function select(result: SearchResult) {
+    setSelected(result);
+    const position = packed && packedPositionAt(packed, result.index);
+    const globe = globeRef.current;
+    if (!position || !globe) return;
+    // Stay at least 1 Earth radius above the satellite (a geostationary one is
+    // 5.6 radii up), and no farther out than 2 radii for low orbits.
+    const satelliteAltitude = position.altitudeKm / EARTH_RADIUS_KM;
+    const altitude = Math.max(Math.min(globe.pointOfView().altitude, 2), satelliteAltitude + 1);
+    globe.pointOfView(
+      { lat: position.lat, lng: position.lng, altitude },
+      prefersReducedMotion() ? 0 : 1000,
+    );
+  }
 
   // Point the camera once the globe exists. (onGlobeReady can fire before the
   // ref is attached, so do it in an effect that runs after the globe mounts.)
@@ -168,7 +254,8 @@ export default function SatelliteGlobe() {
           role="img"
           aria-label={
             state.kind === "ready"
-              ? `3D globe showing ${count.toLocaleString()} active satellites at their current positions`
+              ? `3D globe showing ${count.toLocaleString()} active satellites at their current positions` +
+                (selected && hasMarker ? `, with ${selected.name} highlighted` : "")
               : "3D globe"
           }
         >
@@ -189,9 +276,28 @@ export default function SatelliteGlobe() {
             particlesSize={2}
             particlesSizeAttenuation={false}
             particlesColor={particleColor}
+            htmlElementsData={markerData}
+            htmlLat={markerLat}
+            htmlLng={markerLng}
+            htmlAltitude={markerAltitude}
+            htmlElement={markerElement}
+            // No glide between updates: the marker stays on its dot.
+            htmlTransitionDuration={0}
           />
         </div>
       )}
+
+      {searchSlot &&
+        searchIndex &&
+        createPortal(
+          <SatelliteSearch
+            index={searchIndex}
+            selection={selected && { name: selected.name, onGlobe: hasMarker }}
+            onSelect={select}
+            onClear={() => setSelected(null)}
+          />,
+          searchSlot,
+        )}
 
       <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-2 px-4">
         {/* A live region: its text changes only when the state does (never

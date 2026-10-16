@@ -12,6 +12,10 @@ export const SITE_TAGLINE = "Live satellite tracker and visible-pass planner";
 export const SITE_DESCRIPTION =
   "Watch active satellites move live on a 3D globe, and find out when the ISS and other bright satellites will be visible from your city, and whether clouds will get in the way.";
 
+// Where the live globe puts its search box: an empty slot under the home page's
+// pre-rendered heading (filled once the client-only globe has its data).
+export const GLOBE_SEARCH_SLOT_ID = "globe-search";
+
 export type NavItem = { href: string; label: string };
 
 // trailingSlash is on (next.config.ts), so internal links end in "/".

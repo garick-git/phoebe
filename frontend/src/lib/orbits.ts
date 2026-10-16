@@ -128,3 +128,13 @@ export function packedPositionsAt(satellites: TrackedSatellite[], date: Date): F
   }
   return packed;
 }
+
+/** Satellite `index`'s position in a packed buffer, or null if it has none. */
+export function packedPositionAt(
+  packed: Float32Array,
+  index: number,
+): { lat: number; lng: number; altitudeKm: number } | null {
+  const at = index * PACKED_STRIDE;
+  if (at + 2 >= packed.length || Number.isNaN(packed[at])) return null;
+  return { lat: packed[at], lng: packed[at + 1], altitudeKm: packed[at + 2] };
+}
