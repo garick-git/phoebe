@@ -8,7 +8,14 @@
  * JSON), so that work stays off the main thread too. It has no DOM access;
  * it only talks to the page through messages.
  */
-import { packedPositionsAt, trackSatellites, type ElementSetRow, type TrackedSatellite } from "@/lib/orbits";
+import {
+  orbitPath,
+  orbitPeriodMinutes,
+  packedPositionsAt,
+  trackSatellites,
+  type ElementSetRow,
+  type TrackedSatellite,
+} from "@/lib/orbits";
 import type { FromWorker, ToWorker } from "./positions-messages";
 
 let satellites: TrackedSatellite[] = [];
@@ -44,6 +51,24 @@ self.addEventListener("message", async (event: MessageEvent<ToWorker>) => {
     send(
       { type: "positions", time: message.time, positions, workerMs: performance.now() - start },
       [positions.buffer],
+    );
+    return;
+  }
+
+  if (message.type === "orbit") {
+    const satellite = satellites[message.index];
+    if (!satellite) return;
+    const path = orbitPath(satellite, new Date(message.time));
+    send(
+      {
+        type: "orbit",
+        index: message.index,
+        time: message.time,
+        path,
+        periodMinutes: orbitPeriodMinutes(satellite.meanMotion),
+        inclinationDeg: satellite.inclinationDeg,
+      },
+      [path.buffer],
     );
   }
 });

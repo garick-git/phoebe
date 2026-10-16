@@ -35,6 +35,15 @@ html {
   outline-offset: 2px;
 }
 
+/*
+ * Satellite details panel: the pre-rendered placeholder hides once the globe
+ * renders the selected satellite into the slot right after it. Pure CSS, so
+ * the server-rendered HTML never has to change in the browser.
+ */
+[data-detail-placeholder]:has(+ [data-detail-slot]:not(:empty)) {
+  display: none;
+}
+
 dialog::backdrop {
   background: rgb(2 4 10 / 0.7);
 }

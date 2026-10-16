@@ -30,7 +30,13 @@ export type ElementSetRow = {
   mean_motion_ddot: number;
 };
 
-export type TrackedSatellite = { noradId: number; name: string; satrec: SatRec };
+export type TrackedSatellite = {
+  noradId: number;
+  name: string;
+  satrec: SatRec;
+  meanMotion: number; // revolutions per day (from the elements, for the orbit period)
+  inclinationDeg: number;
+};
 
 export type SatellitePosition = {
   noradId: number;
@@ -68,7 +74,13 @@ export function trackSatellites(rows: ElementSetRow[]): TrackedSatellite[] {
   const tracked: TrackedSatellite[] = [];
   for (const row of rows) {
     try {
-      tracked.push({ noradId: row.norad_cat_id, name: row.name, satrec: toSatrec(row) });
+      tracked.push({
+        noradId: row.norad_cat_id,
+        name: row.name,
+        satrec: toSatrec(row),
+        meanMotion: row.mean_motion,
+        inclinationDeg: row.inclination,
+      });
     } catch {
       // Malformed elements for one satellite shouldn't hide the other 16,000.
     }
@@ -80,14 +92,21 @@ export function trackSatellites(rows: ElementSetRow[]): TrackedSatellite[] {
 function geodeticAt(satrec: SatRec, date: Date, gmst: number) {
   // No result (or, in older satellite.js versions, `false`) means SGP4
   // couldn't propagate this satellite to this time.
-  const position = propagate(satrec, date)?.position;
+  const state = propagate(satrec, date);
+  const position = state?.position;
   if (!position || typeof position !== "object") return null;
   const geo = eciToGeodetic(position, gmst);
   if (!Number.isFinite(geo.height) || geo.height < 0) return null;
+  // SGP4 returns the velocity too (km/s). Its length is the speed relative to
+  // Earth's center, the same definition the API's position endpoint uses.
+  const velocity = state?.velocity;
+  const speedKmS =
+    velocity && typeof velocity === "object" ? Math.hypot(velocity.x, velocity.y, velocity.z) : NaN;
   return {
     lat: degreesLat(geo.latitude),
     lng: degreesLong(geo.longitude),
     altitudeKm: geo.height,
+    speedKmS,
   };
 }
 
@@ -107,8 +126,8 @@ export function positionsAt(satellites: TrackedSatellite[], date: Date): Satelli
   return positions;
 }
 
-/** Numbers per satellite in a packed buffer: latitude, longitude, altitude (km). */
-export const PACKED_STRIDE = 3;
+/** Numbers per satellite in a packed buffer: latitude, longitude, altitude (km), speed (km/s). */
+export const PACKED_STRIDE = 4;
 
 /**
  * The same positions packed into one Float32Array, in `satellites` order
@@ -125,6 +144,7 @@ export function packedPositionsAt(satellites: TrackedSatellite[], date: Date): F
     packed[at] = geo ? geo.lat : NaN;
     packed[at + 1] = geo ? geo.lng : NaN;
     packed[at + 2] = geo ? geo.altitudeKm : NaN;
+    packed[at + 3] = geo ? geo.speedKmS : NaN;
   }
   return packed;
 }
@@ -133,8 +153,49 @@ export function packedPositionsAt(satellites: TrackedSatellite[], date: Date): F
 export function packedPositionAt(
   packed: Float32Array,
   index: number,
-): { lat: number; lng: number; altitudeKm: number } | null {
+): { lat: number; lng: number; altitudeKm: number; speedKmS: number } | null {
   const at = index * PACKED_STRIDE;
-  if (at + 2 >= packed.length || Number.isNaN(packed[at])) return null;
-  return { lat: packed[at], lng: packed[at + 1], altitudeKm: packed[at + 2] };
+  if (at + PACKED_STRIDE > packed.length || Number.isNaN(packed[at])) return null;
+  return {
+    lat: packed[at],
+    lng: packed[at + 1],
+    altitudeKm: packed[at + 2],
+    speedKmS: packed[at + 3],
+  };
+}
+
+/** One sample every 30 s (about 185 for the ISS), but never more than 500 per orbit. */
+const PATH_STEP_MS = 30_000;
+const PATH_MAX_SAMPLES = 500;
+
+/** Numbers per sample in an orbit path: latitude, longitude, altitude (km). */
+export const PATH_STRIDE = 3;
+
+/** How long one orbit takes, from the mean motion (revolutions per day). */
+export function orbitPeriodMinutes(meanMotion: number): number {
+  return 1440 / meanMotion;
+}
+
+/**
+ * Where the satellite will be over the next orbit, starting at `start`: packed
+ * latitude, longitude and altitude per sample (NaN where SGP4 fails). Earth's
+ * rotation angle is recomputed for every sample, so this is the real path over
+ * the ground (drawn at the satellite's altitude), which doesn't close into a
+ * loop: Earth turns about 23 degrees under the ISS during one orbit.
+ * High orbits are capped at 500 samples (a geostationary one: every 2.9 min).
+ */
+export function orbitPath(satellite: TrackedSatellite, start: Date): Float32Array {
+  if (!(satellite.meanMotion > 0)) return new Float32Array(0);
+  const periodMs = orbitPeriodMinutes(satellite.meanMotion) * 60_000;
+  const steps = Math.min(PATH_MAX_SAMPLES, Math.ceil(periodMs / PATH_STEP_MS));
+  const path = new Float32Array((steps + 1) * PATH_STRIDE);
+  for (let k = 0; k <= steps; k++) {
+    const date = new Date(start.getTime() + (periodMs * k) / steps);
+    const geo = geodeticAt(satellite.satrec, date, gstime(date));
+    const at = k * PATH_STRIDE;
+    path[at] = geo ? geo.lat : NaN;
+    path[at + 1] = geo ? geo.lng : NaN;
+    path[at + 2] = geo ? geo.altitudeKm : NaN;
+  }
+  return path;
 }

@@ -16,6 +16,11 @@ export const SITE_DESCRIPTION =
 // pre-rendered heading (filled once the client-only globe has its data).
 export const GLOBE_SEARCH_SLOT_ID = "globe-search";
 
+// Where the live globe puts the selected satellite's details: an empty slot in
+// the pre-rendered details panel (the placeholder next to it hides itself with
+// CSS once the slot has content; see globals.css).
+export const GLOBE_DETAIL_SLOT_ID = "globe-details";
+
 export type NavItem = { href: string; label: string };
 
 // trailingSlash is on (next.config.ts), so internal links end in "/".
