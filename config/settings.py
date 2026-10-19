@@ -198,10 +198,11 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.AnonRateThrottle"],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",
-        # The passes endpoint also has its own, stricter limit: a 7-day search
-        # took about 0.27 s on the t4g.micro (measured 2026-10-19), so 60 a
-        # minute per worker would let one client keep half the server busy.
-        # Tonight needs about 4 requests per page load.
+        # The passes endpoint also has its own, stricter limit, as defense in
+        # depth for the API's heaviest per-request work. Measured on the
+        # t4g.micro (2026-10-19, 7-day ISS search): about 46 ms warm, about
+        # 0.6 s for the first search in each Gunicorn worker. Tonight needs
+        # about 4 requests per page load, far below this.
         "passes": "20/min",
     },
     # One proxy (Caddy) sits in front: take the client address from
