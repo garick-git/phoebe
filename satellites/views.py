@@ -5,6 +5,7 @@ from django.db.models import Case, F, IntegerField, Value, When
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle
 
 from .models import OrbitalElementSet, Satellite
 from .passes import MIN_ELEVATION_DEG, find_passes
@@ -57,6 +58,9 @@ class SatelliteViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_value_regex = r"\d+"  # digits only; anything else is a 404 at the URL
     filter_backends = [filters.SearchFilter]
     search_fields = ["name"]  # case-insensitive "contains" match
+    # Named rate limit for actions that opt in (see passes); None means only
+    # the default per-IP limit applies.
+    throttle_scope = None
 
     def get_serializer_class(self):
         if self.action == "retrieve":
@@ -159,7 +163,13 @@ class SatelliteViewSet(viewsets.ReadOnlyModelViewSet):
             }
         )
 
-    @action(detail=True, methods=["get"])
+    @action(
+        detail=True,
+        methods=["get"],
+        # Both limits apply: the general 60/min and the stricter "passes" one.
+        throttle_classes=[AnonRateThrottle, ScopedRateThrottle],
+        throttle_scope="passes",
+    )
     def passes(self, request, norad_cat_id=None):
         """Upcoming passes over a location: when the satellite rises above 10
         degrees, its highest point, and when it sets below 10 degrees.

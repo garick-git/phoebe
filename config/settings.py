@@ -196,7 +196,14 @@ REST_FRAMEWORK = {
     # memory, so with 2 workers the real limit is up to about 2x this, and counts
     # reset when the container restarts. Good enough to stop abuse, not exact.
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.AnonRateThrottle"],
-    "DEFAULT_THROTTLE_RATES": {"anon": "60/min"},
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/min",
+        # The passes endpoint also has its own, stricter limit: a 7-day search
+        # took about 0.27 s on the t4g.micro (measured 2026-10-19), so 60 a
+        # minute per worker would let one client keep half the server busy.
+        # Tonight needs about 4 requests per page load.
+        "passes": "20/min",
+    },
     # One proxy (Caddy) sits in front: take the client address from
     # X-Forwarded-For. Without this every visitor would look like Caddy's IP
     # and share one bucket.

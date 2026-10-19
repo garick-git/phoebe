@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 import pytest
+from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle
 
 from satellites.ingest import ingest_records
 from satellites.models import Satellite
@@ -158,3 +159,29 @@ def test_unusable_orbital_data_returns_422(client, fixed_now):
 
 def test_passes_are_read_only(client, iss):
     assert client.post(passes_url(AUSTIN), {}).status_code == 405
+
+
+def test_passes_limit_is_configured_at_20_a_minute(settings):
+    assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["passes"] == "20/min"
+
+
+def test_passes_have_their_own_stricter_limit(monkeypatch, client, fixed_now, iss):
+    monkeypatch.setitem(ScopedRateThrottle.THROTTLE_RATES, "passes", "2/min")
+
+    for _ in range(2):
+        assert client.get(passes_url(AUSTIN)).status_code == 200
+    blocked = client.get(passes_url(AUSTIN))
+
+    assert blocked.status_code == 429
+    assert "Retry-After" in blocked.headers
+    # Only the passes endpoint is limited this tightly.
+    assert client.get("/api/satellites/25544/position/").status_code == 200
+
+
+def test_passes_also_count_toward_the_general_limit(monkeypatch, client, fixed_now, iss):
+    monkeypatch.setitem(AnonRateThrottle.THROTTLE_RATES, "anon", "2/min")
+
+    for _ in range(2):
+        assert client.get(passes_url(AUSTIN)).status_code == 200
+
+    assert client.get("/api/satellites/").status_code == 429
