@@ -70,7 +70,7 @@ export default function SatelliteSearch({ index, selection, onSelect, onClear }:
         autoComplete="off"
         spellCheck={false}
         enterKeyHint="search"
-        placeholder="Search satellites, e.g. ISS"
+        placeholder="Search satellites, e.g. ISS or Hubble"
         value={query}
         onChange={(event) => {
           setQuery(event.target.value);
@@ -104,7 +104,10 @@ export default function SatelliteSearch({ index, selection, onSelect, onClear }:
               i === active ? "bg-raised text-ink" : "text-muted"
             }`}
           >
-            <span className="truncate">{result.name}</span>
+            <span className="truncate">
+              {result.name}
+              {result.nickname && <span className="text-muted"> · {result.nickname}</span>}
+            </span>
             <span className="shrink-0 font-mono text-xs text-muted">{result.noradId}</span>
           </li>
         ))}

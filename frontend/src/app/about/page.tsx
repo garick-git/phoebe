@@ -42,7 +42,11 @@ export default function AboutPage() {
           <a href="https://open-meteo.com" className={linkClass}>
             Open-Meteo.com
           </a>
-          .
+          ; city locations are based on{" "}
+          <a href="https://www.geonames.org" className={linkClass}>
+            GeoNames
+          </a>{" "}
+          (CC BY 4.0).
         </li>
       </ul>
 

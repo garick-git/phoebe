@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
+
+import TonightApp from "@/components/TonightApp";
 import { pageMetadata } from "@/lib/site";
 
 export const metadata: Metadata = pageMetadata({
@@ -8,30 +11,34 @@ export const metadata: Metadata = pageMetadata({
   path: "/tonight/",
 });
 
-/** Tonight (visible passes). Placeholder; mobile-first because people check it outside. */
+/** Pre-rendered stand-in while the interactive part loads (and what the static HTML holds). */
+function TonightSkeleton() {
+  return (
+    <div aria-hidden="true" className="mt-6 space-y-3">
+      <div className="h-4 w-24 rounded bg-raised" />
+      <div className="h-12 rounded-full border border-line bg-surface" />
+      <div className="h-11 w-40 rounded-full border border-line" />
+    </div>
+  );
+}
+
+/**
+ * Tonight (visible passes). Mobile-first because people check it outside.
+ * The heading and intro are static HTML; the search and passes read the URL
+ * in the browser. useSearchParams needs this <Suspense> boundary in a static
+ * export: at build time there is no URL, so the build renders the fallback.
+ */
 export default function TonightPage() {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Tonight</h1>
       <p className="mt-2 text-muted">
-        Pick a city to see which satellites you can spot tonight, when to go outside, and where to
-        look.
+        Pick a city to see when the ISS, Tiangong and Hubble pass over and whether you can see
+        them.
       </p>
-
-      <p className="mt-6 rounded-lg border border-dashed border-line p-4 text-sm text-muted">
-        Placeholder: city search and pass cards go here.
-      </p>
-
-      {/* Skeleton pass cards showing the planned layout. */}
-      <ul aria-hidden="true" className="mt-6 space-y-3">
-        {[0, 1, 2].map((i) => (
-          <li key={i} className="rounded-xl border border-line bg-surface p-4">
-            <div className="h-4 w-24 rounded bg-raised" />
-            <div className="mt-3 h-3 w-48 rounded bg-raised" />
-            <div className="mt-2 h-3 w-32 rounded bg-raised" />
-          </li>
-        ))}
-      </ul>
+      <Suspense fallback={<TonightSkeleton />}>
+        <TonightApp />
+      </Suspense>
     </div>
   );
 }
