@@ -41,7 +41,7 @@ Satellite skywatching app: live 3D globe of active satellites, visible-pass pred
    - Search: http://127.0.0.1:8000/api/satellites/?search=ISS
    - Detail: http://127.0.0.1:8000/api/satellites/25544/
    - Current position: http://127.0.0.1:8000/api/satellites/25544/position/
-   - Upcoming passes over a place (rise, peak and set above 10°; `lat` and `lon` required and rounded to 2 decimals, `days` 1–7, default 7): http://127.0.0.1:8000/api/satellites/25544/passes/?lat=30.27&lon=-97.74&days=7
+   - Upcoming passes over a place (rise, peak and set above 10°, plus whether each pass is visible: satellite sunlit and Sun below −6°, with when it appears, its highest visible point and when it disappears, or why not; `lat` and `lon` required and rounded to 2 decimals, `days` 1–7, default 7): http://127.0.0.1:8000/api/satellites/25544/passes/?lat=30.27&lon=-97.74&days=7
    - Globe data (newest orbital elements for every current satellite, one unpaginated list): http://127.0.0.1:8000/api/satellites/elements/
 
    The API is read-only and rate limited (60 requests a minute per client), locally too.

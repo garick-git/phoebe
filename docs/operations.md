@@ -164,6 +164,18 @@ Both hostnames are subdomains of garickm.com, whose DNS is managed at Vercel.
 - Amplify's custom-domain settings: domain `garickm.com` with the root **excluded**, only the `phoebe` subdomain mapped to `main`, and an **Amplify managed certificate** (free).
 - **Check:** `dig +short phoebe.garickm.com` (CloudFront addresses), `dig +short phoebe-api.garickm.com` (the Elastic IP), `dig +short CAA garickm.com` (four rows, including `amazon.com`).
 
+## Ephemeris excerpt (expires 2031-01-01)
+
+Pass visibility needs where the Sun and Earth are. That comes from `satellites/ephemeris/de421_2026-2031.bsp`, a 551,344-byte excerpt of NASA JPL's DE421 ephemeris covering 2026-01-01 to 2031-01-01, committed with the code (nothing is downloaded at build or run time). `test_ephemeris.py` starts failing a year before it runs out (from 2030-01-01). To cut a new one, on the Mac with the dev stack running:
+
+```
+curl -fL -o data/de421.bsp https://ssd.jpl.nasa.gov/ftp/eph/planets/bsp/de421.bsp
+shasum -a 256 data/de421.bsp   # a20a7139da04cbc462454634918e9a9ca69127044e2cc9d4f9c16e238d2deedc (checked 2026-10-19)
+docker compose exec web python -m jplephem excerpt <start yyyy/mm/dd> <end yyyy/mm/dd> data/de421.bsp satellites/ephemeris/de421_<start>-<end>.bsp
+```
+
+Then update `EPHEMERIS_PATH` in `satellites/passes.py`, run the tests, remove the old file with `git rm`, and delete `data/de421.bsp`. Keep every body (no `--targets`): skyfield's `apparent()` needs Jupiter and Saturn as well as the Sun and Earth. DE421 itself covers 1899–2053. Never put the file in a folder named `data` (`.gitignore` ignores those at any depth).
+
 ## Gotchas
 
 - Check which terminal you're in before pasting (Mac versus server prompt).

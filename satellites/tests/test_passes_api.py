@@ -63,12 +63,39 @@ def test_returns_the_weeks_passes(client, fixed_now, iss):
     expected = find_passes(iss, 30.27, -97.74, NOW, 7)
     assert len(data["passes"]) == len(expected) > 0
     first, want = data["passes"][0], expected[0]
-    assert set(first) == {"rise", "peak", "set", "max_elevation_deg", "duration_s"}
+    assert set(first) == {"rise", "peak", "set", "max_elevation_deg", "duration_s", "visibility"}
     assert set(first["rise"]) == {"time", "azimuth_deg", "elevation_deg"}
     assert first["rise"]["time"] == want.rise.time.isoformat().replace("+00:00", "Z")
     assert first["peak"]["azimuth_deg"] == round(want.peak.azimuth_deg, 1)
     assert first["max_elevation_deg"] == round(want.max_elevation_deg, 1)
     assert first["duration_s"] == want.duration_s
+
+
+def test_every_pass_says_whether_it_is_visible(client, fixed_now, iss):
+    data = client.get(passes_url(AUSTIN)).json()
+    expected = find_passes(iss, 30.27, -97.74, NOW, 7)
+
+    def as_json(point):
+        return {
+            "time": point.time.isoformat().replace("+00:00", "Z"),
+            "azimuth_deg": round(point.azimuth_deg, 1),
+            "elevation_deg": round(point.elevation_deg, 1),
+        }
+
+    shown = [p["visibility"] for p in data["passes"]]
+    assert [v["visible"] for v in shown] == [p.visibility.visible for p in expected]
+    # The saved ISS week over Austin has both kinds.
+    hidden = shown[[p.visibility.visible for p in expected].index(False)]
+    assert hidden == {"visible": False, "reason": "daylight", "start": None, "highest": None, "end": None}
+    index = [p.visibility.visible for p in expected].index(True)
+    seen, want = shown[index], expected[index].visibility
+    assert seen == {
+        "visible": True,
+        "reason": None,
+        "start": as_json(want.start),
+        "highest": as_json(want.highest),
+        "end": as_json(want.end),
+    }
 
 
 def test_days_limits_the_window(client, fixed_now, iss):

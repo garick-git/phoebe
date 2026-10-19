@@ -45,6 +45,21 @@ def _pass_point(point):
     }
 
 
+def _visibility(visibility):
+    """Whether the pass can be seen; if so, when it appears, its highest point
+    while visible, and when it disappears; if not, why (see passes.py)."""
+    def point(p):
+        return _pass_point(p) if p is not None else None
+
+    return {
+        "visible": visibility.visible,
+        "reason": visibility.reason,
+        "start": point(visibility.start),
+        "highest": point(visibility.highest),
+        "end": point(visibility.end),
+    }
+
+
 def utc_now():
     """The current UTC time, to the second. It's a function so tests can swap
     in a fixed time."""
@@ -172,7 +187,9 @@ class SatelliteViewSet(viewsets.ReadOnlyModelViewSet):
     )
     def passes(self, request, norad_cat_id=None):
         """Upcoming passes over a location: when the satellite rises above 10
-        degrees, its highest point, and when it sets below 10 degrees.
+        degrees, its highest point, and when it sets below 10 degrees, plus
+        whether each pass is visible (sunlit satellite, dark sky) and when.
+        Every pass is returned; clients filter on visibility.visible.
 
         Query: lat and lon (required, rounded to 2 decimals before use) and
         days (1 to 7, default 7). The search always starts now.
@@ -226,6 +243,7 @@ class SatelliteViewSet(viewsets.ReadOnlyModelViewSet):
                         "set": _pass_point(p.set),
                         "max_elevation_deg": round(p.max_elevation_deg, 1),
                         "duration_s": p.duration_s,
+                        "visibility": _visibility(p.visibility),
                     }
                     for p in found
                 ],
