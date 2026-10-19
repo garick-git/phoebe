@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from django.db.models import Case, F, IntegerField, Value, When
 from rest_framework import filters, status, viewsets
@@ -7,10 +7,17 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from .models import OrbitalElementSet, Satellite
+from .passes import MIN_ELEVATION_DEG, find_passes
 from .positions import PropagationError, compute_position
-from .serializers import SatelliteDetailSerializer, SatelliteListSerializer
+from .serializers import (
+    PassQuerySerializer,
+    SatelliteDetailSerializer,
+    SatelliteListSerializer,
+)
 
 logger = logging.getLogger(__name__)
+
+UNUSABLE_ORBIT_MESSAGE = "Cannot compute a position from this satellite's orbital data."
 
 # What the globe needs per satellite: identity plus the orbital elements that
 # satellite.js turns into positions. Never rounded: SGP4 needs full precision.
@@ -26,6 +33,15 @@ GLOBE_ELEMENT_FIELDS = [
     "mean_motion_dot",
     "mean_motion_ddot",
 ]
+
+
+def _pass_point(point):
+    # 1 decimal: a tenth of a degree is far finer than anyone can point.
+    return {
+        "time": point.time,
+        "azimuth_deg": round(point.azimuth_deg, 1),
+        "elevation_deg": round(point.elevation_deg, 1),
+    }
 
 
 def utc_now():
@@ -48,7 +64,7 @@ class SatelliteViewSet(viewsets.ReadOnlyModelViewSet):
         return SatelliteListSerializer
 
     def get_queryset(self):
-        if self.action in ("retrieve", "position"):
+        if self.action in ("retrieve", "position", "passes"):
             # Old links keep working for satellites that left the feed.
             queryset = Satellite.objects.all()
         else:
@@ -122,7 +138,7 @@ class SatelliteViewSet(viewsets.ReadOnlyModelViewSet):
                 error,
             )
             return Response(
-                {"detail": "Cannot compute a position from this satellite's orbital data."},
+                {"detail": UNUSABLE_ORBIT_MESSAGE},
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
@@ -140,5 +156,68 @@ class SatelliteViewSet(viewsets.ReadOnlyModelViewSet):
                 "speed_km_s": round(current.speed_km_s, 3),
                 "element_set_epoch": element_set.epoch,
                 "element_set_age_hours": round(age_hours, 1),
+            }
+        )
+
+    @action(detail=True, methods=["get"])
+    def passes(self, request, norad_cat_id=None):
+        """Upcoming passes over a location: when the satellite rises above 10
+        degrees, its highest point, and when it sets below 10 degrees.
+
+        Query: lat and lon (required, rounded to 2 decimals before use) and
+        days (1 to 7, default 7). The search always starts now.
+        """
+        query = PassQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)  # 400 with a message per field
+        latitude = query.validated_data["lat"]
+        longitude = query.validated_data["lon"]
+        days = query.validated_data["days"]
+
+        satellite = self.get_object()  # 404 if the NORAD ID is unknown
+        element_set = satellite.element_sets.first()  # newest epoch first
+        if element_set is None:
+            return Response(
+                {"detail": "No orbital data for this satellite yet."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        start = utc_now()
+        try:
+            found = find_passes(element_set, latitude, longitude, start, days)
+        except PropagationError as error:
+            # Never log the location, only which satellite failed.
+            logger.warning(
+                "Cannot compute passes for NORAD %s: %s",
+                satellite.norad_cat_id,
+                error,
+            )
+            return Response(
+                {"detail": UNUSABLE_ORBIT_MESSAGE},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        age_hours = (start - element_set.epoch).total_seconds() / 3600
+        return Response(
+            {
+                "norad_cat_id": satellite.norad_cat_id,
+                "name": satellite.name,
+                # The rounded location actually used, so clients can see it.
+                "location": {"latitude": latitude, "longitude": longitude},
+                "start": start,
+                "end": start + timedelta(days=days),
+                "days": days,
+                "min_elevation_deg": MIN_ELEVATION_DEG,
+                "element_set_epoch": element_set.epoch,
+                "element_set_age_hours": round(age_hours, 1),
+                "passes": [
+                    {
+                        "rise": _pass_point(p.rise),
+                        "peak": _pass_point(p.peak),
+                        "set": _pass_point(p.set),
+                        "max_elevation_deg": round(p.max_elevation_deg, 1),
+                        "duration_s": p.duration_s,
+                    }
+                    for p in found
+                ],
             }
         )

@@ -9,8 +9,9 @@ from skyfield.api import EarthSatellite, load, wgs84
 # Skyfield's Timescale converts between UTC and the time scales astronomy
 # uses (it also accounts for leap seconds). load.timescale() uses data that
 # ships inside skyfield, so it needs no download. It is read-only, so one
-# shared copy is built when this module is first imported.
-_timescale = load.timescale()
+# shared copy is built when this module is first imported (passes.py uses
+# it too).
+timescale = load.timescale()
 
 
 class PropagationError(Exception):
@@ -51,15 +52,20 @@ def _omm_fields(element_set):
     }
 
 
+def earth_satellite(element_set):
+    """A skyfield satellite (SGP4 model) built from a stored element set."""
+    return EarthSatellite.from_omm(timescale, _omm_fields(element_set))
+
+
 def compute_position(element_set, when):
     """Where the satellite is at `when`, which must be timezone-aware.
 
     Raises ValueError for a naive datetime and PropagationError if SGP4
     cannot compute a position from the element set.
     """
-    satellite = EarthSatellite.from_omm(_timescale, _omm_fields(element_set))
+    satellite = earth_satellite(element_set)
     # SGP4: element set + time -> position and velocity (km from Earth's center).
-    geocentric = satellite.at(_timescale.from_datetime(when))
+    geocentric = satellite.at(timescale.from_datetime(when))
     if geocentric.message is not None:
         # On failure skyfield returns NaN coordinates plus an explanation.
         raise PropagationError(geocentric.message)

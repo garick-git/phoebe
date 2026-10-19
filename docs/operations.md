@@ -9,7 +9,7 @@ Nothing secret belongs in this file. It never contains the bucket name, the AWS 
 - **One AWS EC2 server** (t4g.micro, Arm, 1 GB RAM plus a 2 GB swap file) in us-east-2, running Ubuntu Server 24.04 LTS with automatic security updates.
 - **Docker Compose** (`compose.prod.yaml`) runs three containers:
   - `caddy`: the only container with published ports (80 and 443). It gets and renews the Let's Encrypt certificate and redirects HTTP to HTTPS. It also compresses every response (`encode zstd gzip` in the `Caddyfile`), which shrinks the globe's elements response from about 5 MB to about 1 MB.
-  - `web`: Django served by Gunicorn (2 workers). Static files are served by WhiteNoise and collected when the image is built.
+  - `web`: Django served by Gunicorn (2 workers; settings in `gunicorn.conf.py`, which Gunicorn reads from `/app` on its own). The access log leaves out the query string and the Referer, so visitors' coordinates (`?lat=&lon=` on the passes endpoint) are never logged; `satellites/tests/test_logging.py` guards this. Each line ends with the request time in ms. Static files are served by WhiteNoise and collected when the image is built.
   - `db`: PostgreSQL 18. Its data is in the named volume `postgres_data` and it is reachable only inside the Docker network.
 - **Public API:** https://phoebe-api.garickm.com/api/satellites/
 - **Front end:** https://phoebe.garickm.com (AWS Amplify, see below)
