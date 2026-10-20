@@ -1,0 +1,102 @@
+# CI: lint and test both halves of the repo on every pull request into main.
+# Branch protection (a ruleset on main) requires both jobs to pass before a
+# PR can merge. Deploys are separate: Amplify builds the front end on merge.
+#
+# No path filters on purpose: a required check that never runs (because its
+# paths didn't change) leaves the PR stuck on "Expected", so both jobs always
+# run. Both are offline apart from installing packages (npm audit also asks the
+# npm registry for advisories).
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # a "Run workflow" button in the Actions tab
+
+# Least privilege: the job's GitHub token can read the code and nothing else.
+permissions:
+  contents: read
+
+# A new push to the same PR cancels the run that's still going for the old one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    # The ruleset requires checks by this name, so keep it short and stable.
+    name: frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      # The whole repo, not just frontend/: orbits.agreement.test.ts reads
+      # satellites/tests/fixtures/position_agreement.json.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # don't leave the token in .git/config
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc # same Node as local and Amplify
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      # Production dependencies only: the full audit fails on a dev-only
+      # finding (braces) that never ships to the browser.
+      - run: npm audit --omit=dev
+      - run: npm test
+      - run: npm run build
+
+  backend:
+    name: backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    # A throwaway PostgreSQL next to the job, the same image as compose.yaml.
+    # Port 5432 is published on the runner, so the job reaches it at localhost.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: phoebe
+          POSTGRES_USER: phoebe
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+        ports:
+          - 5432:5432
+        # The job waits until Postgres answers before running any step.
+        options: >-
+          --health-cmd "pg_isready -U phoebe -d phoebe"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Dummy values, never real secrets: this database lives for a few minutes
+    # and holds only test data. DJANGO_DEBUG is left unset, so the tests run
+    # with production's DEBUG=False.
+    env:
+      DJANGO_SECRET_KEY: ci-only-not-a-secret
+      POSTGRES_DB: phoebe
+      POSTGRES_USER: phoebe
+      POSTGRES_PASSWORD: ci-only-not-a-secret
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13" # same as the Dockerfile
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - run: pip install -r requirements.txt
+      - run: ruff check .
+      - run: pytest

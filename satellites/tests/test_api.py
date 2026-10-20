@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from satellites.models import Satellite
 from satellites.ingest import ingest_records
+from satellites.models import Satellite
 from satellites.positions import compute_position
 from satellites.tests.test_ingest import omm_record
 

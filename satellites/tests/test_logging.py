@@ -1,10 +1,10 @@
 """The production access log must never contain a visitor's coordinates."""
 
+import runpy
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
-import runpy
 from gunicorn.config import Config
 from gunicorn.glogging import Logger
 
