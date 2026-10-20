@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 
 import PassCard from "@/components/PassCard";
+import { fetchCloudForecast } from "@/lib/forecast";
 import { fetchPasses, PASS_DAYS, PassesError, type PassesResponse } from "@/lib/passes";
 import type { Place } from "@/lib/place";
 import { buildPassCards, joinWords, zoneName, type PassCardModel } from "@/lib/plainPass";
 import { POPULAR_SATELLITES } from "@/lib/popular";
+import type { ForecastState } from "@/lib/viewing";
 
 type Row = { status: "ok"; response: PassesResponse } | { status: "error"; httpStatus: number | null };
 
@@ -16,6 +18,12 @@ type Row = { status: "ok"; response: PassesResponse } | { status: "error"; httpS
  * rendering stays pure; it's "now" until the minute clock below ticks.
  */
 type Loaded = { key: string; at: number; rows: Partial<Record<number, Row>> };
+
+/** The cloud forecast for one request key, like `Loaded`. */
+type ForecastLoaded = { key: string; state: ForecastState };
+
+// One shared object, so the cards' useMemo doesn't rerun while still loading.
+const FORECAST_LOADING: ForecastState = { status: "loading" };
 
 function errorText(httpStatus: number | null): string {
   if (httpStatus === 429) return "too many requests right now. Wait a minute, then try again.";
@@ -49,6 +57,7 @@ function CardList({ cards }: { cards: PassCardModel[] }) {
 export default function PassSummary({ place }: { place: Place }) {
   const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState<Loaded>({ key: "", at: 0, rows: {} });
+  const [forecastLoaded, setForecastLoaded] = useState<ForecastLoaded>({ key: "", state: FORECAST_LOADING });
   const key = `${place.lat},${place.lon},${attempt}`;
 
   useEffect(() => {
@@ -69,6 +78,14 @@ export default function PassSummary({ place }: { place: Place }) {
         },
       );
     }
+    // The cloud forecast: one request per place, started with the passes. Cards
+    // don't wait for it; each card's rating line fills in when it arrives.
+    fetchCloudForecast(place.lat, place.lon, controller.signal).then(
+      (forecast) => setForecastLoaded({ key, state: { status: "ok", forecast } }),
+      () => {
+        if (!controller.signal.aborted) setForecastLoaded({ key, state: { status: "error" } });
+      },
+    );
     // A new place (or leaving the page) cancels requests for the old one.
     return () => controller.abort();
   }, [key, place.lat, place.lon]);
@@ -90,6 +107,7 @@ export default function PassSummary({ place }: { place: Place }) {
   const current = loaded.key === key ? loaded : null;
   const nowMs = Math.max(current?.at ?? 0, clock);
   const rows = current?.rows ?? {};
+  const forecast = forecastLoaded.key === key ? forecastLoaded.state : FORECAST_LOADING;
   const allDone = POPULAR_SATELLITES.every((sat) => rows[sat.noradId]);
   const okSats = POPULAR_SATELLITES.filter((sat) => rows[sat.noradId]?.status === "ok");
   const failedSats = POPULAR_SATELLITES.filter((sat) => rows[sat.noradId]?.status === "error");
@@ -102,8 +120,8 @@ export default function PassSummary({ place }: { place: Place }) {
         ? [{ noradId: sat.noradId, nickname: sat.nickname, passes: row.response.passes }]
         : [];
     });
-    return buildPassCards(satellites, nowMs, place.timeZone);
-  }, [current, allDone, nowMs, place.timeZone]);
+    return buildPassCards(satellites, nowMs, place.timeZone, forecast);
+  }, [current, allDone, nowMs, place.timeZone, forecast]);
 
   if (!cards || !current) {
     return (

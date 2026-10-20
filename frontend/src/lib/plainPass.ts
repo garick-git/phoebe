@@ -14,9 +14,11 @@
  * - Low or brief passes are tagged, never hidden.
  * - Cards are sorted by time across satellites.
  * Built on visibility.start / highest / end, not rise / peak / set.
+ * The cloud rating's logic lives in lib/viewing.ts; this file only words it.
  */
 
 import type { Pass, PassPoint } from "@/lib/passes";
+import { viewingFor, viewingText, type ForecastState } from "@/lib/viewing";
 
 /** Height bands, in degrees above the horizon (a fist at arm's length is about 10°). */
 export const PARTWAY_FROM_DEG = 20;
@@ -266,6 +268,10 @@ export type PassCardModel = {
   path: string;
   duration: string;
   caution: string | null;
+  /** "Good viewing · mostly clear", "Checking clouds…" or "Cloud forecast unavailable". */
+  viewing: string;
+  /** "10% (5:00 am forecast)" for the details, or null with no rating. */
+  cloudDetail: string | null;
   details: DetailRow[];
 };
 
@@ -286,11 +292,13 @@ export function passCard(
   pass: Pass,
   nowMs: number,
   timeZone: string,
+  forecast: ForecastState,
 ): PassCardModel | null {
   const part = visiblePart(pass);
   if (!part) return null;
   const { start, highest, end } = part;
   const time = formatClock(start.time, timeZone);
+  const viewing = viewingFor(forecast, start.time, end.time, nowMs);
   const appears = ms(start.time) - ms(pass.rise.time) > SAME_MOMENT_MS;
   const fades = ms(pass.set.time) - ms(end.time) > SAME_MOMENT_MS;
   return {
@@ -304,6 +312,11 @@ export function passCard(
     path: pathSentence(pass) ?? "",
     duration: durationText(visibleSeconds(pass)),
     caution: cautionTag(pass),
+    viewing: viewingText(viewing),
+    cloudDetail:
+      viewing.status === "rated"
+        ? `${viewing.percent}% (${formatClock(new Date(viewing.hourMs).toISOString(), timeZone)} forecast)`
+        : null,
     details: [
       detailRow(appears ? "Appears" : "Rises", start, timeZone),
       detailRow("Highest", highest, timeZone),
@@ -316,18 +329,21 @@ export function passCard(
  * Every visible pass that hasn't ended yet as a card, sorted by time across
  * satellites, split into tonight and later. (The API only returns upcoming
  * passes, but a page left open overnight would otherwise keep showing old ones.)
+ * The cloud forecast only fills in each card's rating; it never filters or
+ * reorders cards.
  */
 export function buildPassCards(
   satellites: readonly SatellitePasses[],
   nowMs: number,
   timeZone: string,
+  forecast: ForecastState,
 ): { tonight: PassCardModel[]; later: PassCardModel[] } {
   const cards: PassCardModel[] = [];
   for (const sat of satellites) {
     for (const pass of sat.passes) {
       const end = pass.visibility.end;
       if (end && ms(end.time) <= nowMs) continue;
-      const card = passCard(sat.noradId, sat.nickname, pass, nowMs, timeZone);
+      const card = passCard(sat.noradId, sat.nickname, pass, nowMs, timeZone, forecast);
       if (card) cards.push(card);
     }
   }

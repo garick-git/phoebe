@@ -2,8 +2,10 @@ import type { PassCardModel } from "@/lib/plainPass";
 
 /**
  * One visible pass in plain language. The headline answers "when and where
- * do I look"; exact times and degrees sit behind a native <details>, so the
- * numbers are there on request (brief 6c) with no JavaScript.
+ * do I look"; the cloud rating right under it says whether it's worth going
+ * out, in words (never color alone); exact times, degrees and the cloud
+ * percentage sit behind a native <details>, so the numbers are there on
+ * request (brief 6c) with no JavaScript.
  */
 export default function PassCard({ card }: { card: PassCardModel }) {
   return (
@@ -18,6 +20,7 @@ export default function PassCard({ card }: { card: PassCardModel }) {
         </p>
       </div>
       <p className="mt-1 text-xl font-semibold leading-snug text-ink">{card.headline}</p>
+      <p className="mt-2 text-base font-medium text-ink">{card.viewing}</p>
       <p className="mt-2 text-base leading-relaxed text-muted">{card.path}</p>
       {card.caution && (
         <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-line px-3 py-1 text-sm text-ink">
@@ -40,6 +43,12 @@ export default function PassCard({ card }: { card: PassCardModel }) {
               </dd>
             </div>
           ))}
+          {card.cloudDetail && (
+            <div className="flex flex-wrap gap-x-3">
+              <dt className="w-20 shrink-0 text-muted">Clouds</dt>
+              <dd className="text-ink">{card.cloudDetail}</dd>
+            </div>
+          )}
         </dl>
       </details>
     </article>
