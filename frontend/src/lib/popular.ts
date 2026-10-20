@@ -12,6 +12,8 @@ export type PopularSatellite = {
   noradId: number;
   /** Short name shown on Tonight and next to CelesTrak's name in search. */
   nickname: string;
+  /** The nickname as it reads mid-sentence: "the ISS", "Tiangong", "Hubble". */
+  inSentence: string;
   fullName: string;
   /** Lowercase; a query that matches the start of any alias finds it. */
   aliases: readonly string[];
@@ -21,18 +23,21 @@ export const POPULAR_SATELLITES: readonly PopularSatellite[] = [
   {
     noradId: 25544,
     nickname: "ISS",
+    inSentence: "the ISS",
     fullName: "International Space Station",
     aliases: ["iss", "space station", "international space station", "zarya"],
   },
   {
     noradId: 48274,
     nickname: "Tiangong",
+    inSentence: "Tiangong",
     fullName: "Tiangong space station",
     aliases: ["tiangong", "chinese space station", "css", "tianhe"],
   },
   {
     noradId: 20580,
     nickname: "Hubble",
+    inSentence: "Hubble",
     fullName: "Hubble Space Telescope",
     aliases: ["hubble", "hst", "hubble space telescope"],
   },
