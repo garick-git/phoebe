@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 import os
+from decimal import Decimal
 from pathlib import Path
 
 from config.cors import parse_allowed_origins
@@ -78,6 +79,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "satellites",
+    "ask",
 ]
 
 MIDDLEWARE = [
@@ -204,9 +206,29 @@ REST_FRAMEWORK = {
         # 0.6 s for the first search in each Gunicorn worker. Tonight needs
         # about 4 requests per page load, far below this.
         "passes": "20/min",
+        # Ask Phoebe (POST /api/ask/) calls a paid API, so it gets its own,
+        # much stricter per-IP limits on top of the 60/min (each question is
+        # about 2 Claude calls). Per worker, like the rest (up to about 2x).
+        "ask_burst": "5/min",
+        "ask_day": "20/day",
     },
     # One proxy (Caddy) sits in front: take the client address from
     # X-Forwarded-For. Without this every visitor would look like Caddy's IP
     # and share one bucket.
     "NUM_PROXIES": 1,
 }
+
+
+# Ask Phoebe (the ask app): Claude with tools over Phoebe's own data.
+# The API key is a real secret: it lives only in the server's .env (never in
+# the repo, CI or logs). Empty means Ask Phoebe answers 503 "not switched on",
+# which is how local development without a key and CI run.
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+# Opus by default (brief: don't downgrade to save money; the budgets below
+# control cost). A setting so the Oct 30 evaluation can compare models; a
+# model without a price in ask/budget.py stops startup.
+ASK_PHOEBE_MODEL = os.environ.get("ASK_PHOEBE_MODEL", "claude-opus-5-5")
+# Site-wide dollars per UTC day (estimated from token counts), counted
+# exactly in Postgres. With the Console's $5/month workspace limit as the
+# hard stop. Decision log 2026-10-21.
+ASK_PHOEBE_DAILY_BUDGET_USD = Decimal(os.environ.get("ASK_PHOEBE_DAILY_BUDGET_USD", "0.15"))

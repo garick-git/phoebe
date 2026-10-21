@@ -42,6 +42,24 @@ ephemeris = load_file(EPHEMERIS_PATH)
 _sun = ephemeris["sun"]
 _earth = ephemeris["earth"]
 
+
+def _read_ephemeris_segments():
+    """Do the same Sun calculation find_passes() does, once, at import.
+
+    jplephem reads each segment's header with seek() + read() on one shared
+    file the first time the segment is used (afterwards it's memory-mapped,
+    which is safe to share). Gunicorn runs several threads per worker
+    (gunicorn.conf.py), so doing that first read here, while Python's import
+    lock lets only one thread run this module, means no two requests can ever
+    interleave those reads. It also takes that work off the first request.
+    """
+    t = timescale.utc(2027, 1, 1)  # any moment inside the 2026-2031 excerpt
+    here = _earth + wgs84.latlon(0, 0)
+    here.at(t).observe(_sun).apparent()
+
+
+_read_ephemeris_segments()
+
 # Visibility is checked on a grid: every COARSE_STEP_S seconds through each
 # pass (all passes in one vectorized call), then FINE_SAMPLES_PER_GAP times
 # more often inside each gap where the answer changes, so start and end are

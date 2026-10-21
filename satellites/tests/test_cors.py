@@ -68,6 +68,72 @@ def test_cors_only_applies_under_the_api(client):
     assert ALLOW not in response.headers
 
 
+PREFLIGHT = {
+    "Origin": FRONT_END,
+    "Access-Control-Request-Method": "POST",
+    "Access-Control-Request-Headers": "content-type",
+}
+
+
+def test_a_preflight_from_the_front_end_allows_a_json_post(client):
+    response = client.options("/api/ask/", headers=PREFLIGHT)
+
+    assert response.status_code == 200
+    assert response.headers[ALLOW] == FRONT_END
+    assert response.headers["Access-Control-Allow-Methods"] == "GET, POST"
+    assert response.headers["Access-Control-Allow-Headers"] == "Content-Type"
+    assert response.headers["Access-Control-Max-Age"] == "7200"
+    assert "Origin" in response.headers["Vary"]
+    # Cookies are never allowed cross-origin.
+    assert "Access-Control-Allow-Credentials" not in response.headers
+
+
+@pytest.mark.parametrize("origin", ["https://evil.example", "null"])
+def test_a_preflight_from_another_origin_gets_no_permission(client, origin):
+    response = client.options("/api/ask/", headers={**PREFLIGHT, "Origin": origin})
+
+    # An answer without the Allow headers is how CORS says no.
+    assert response.status_code == 200
+    for header in (ALLOW, "Access-Control-Allow-Methods", "Access-Control-Allow-Headers"):
+        assert header not in response.headers
+
+
+def test_preflights_never_use_up_the_rate_limit(monkeypatch, client):
+    monkeypatch.setitem(AnonRateThrottle.THROTTLE_RATES, "anon", "1/min")
+
+    for _ in range(3):
+        assert client.options(LIST_URL, headers=PREFLIGHT).status_code == 200
+
+    # The one request allowed this minute is still available.
+    assert client.get(LIST_URL, headers={"Origin": FRONT_END}).status_code == 200
+
+
+def test_a_plain_options_request_still_reaches_the_api(client):
+    # No Access-Control-Request-Method: not a preflight, so DRF answers it as
+    # before (its usual description of the endpoint).
+    response = client.options(LIST_URL, headers={"Origin": FRONT_END})
+
+    assert response.status_code == 200
+    assert "Access-Control-Allow-Methods" not in response.headers
+    assert response.headers[ALLOW] == FRONT_END
+
+
+def test_preflights_outside_the_api_get_no_cors(client):
+    response = client.options("/not-the-api/", headers=PREFLIGHT)
+
+    assert ALLOW not in response.headers
+
+
+def test_a_bad_origin_is_never_echoed_in_the_error():
+    # A .env without a final newline glued the next line onto this one.
+    glued = "http://localhost:3000ANTHROPIC_API_KEY=not-a-real-secret"
+
+    with pytest.raises(ImproperlyConfigured) as raised:
+        parse_allowed_origins(glued)
+    assert "not-a-real-secret" not in str(raised.value)
+    assert "item 1" in str(raised.value)
+
+
 def test_allowed_origins_are_read_from_a_comma_separated_list():
     raw = " https://phoebe.example.com , http://localhost:3000 ,"
 

@@ -6,9 +6,16 @@ Development doesn't use this file: compose.yaml runs runserver instead.
 """
 
 bind = "0.0.0.0:8000"
-# 2 sync workers: each loads numpy and skyfield, and the server has 1 GB
+# 2 worker processes: each loads numpy and skyfield, and the server has 1 GB
 # shared with Postgres.
 workers = 2
+# Each worker runs 4 threads (up to 8 requests at once). An Ask Phoebe
+# question spends 5-15 s waiting on the Claude API; with plain sync workers,
+# two questions at once would block every other request (the globe, Tonight).
+# Threads share their process's memory, so this adds almost none. Django is
+# thread-safe; the ephemeris is read through mmap (satellites/passes.py).
+worker_class = "gthread"
+threads = 4
 # Worker health pings go to memory, not the container's disk (a known Docker
 # issue where they can stall).
 worker_tmp_dir = "/dev/shm"
