@@ -1,6 +1,7 @@
 # CI: lint and test both halves of the repo on every pull request into main.
 # Branch protection (a ruleset on main) requires both jobs to pass before a
-# PR can merge. Deploys are separate: Amplify builds the front end on merge.
+# PR can merge. Deploys are separate: on merge, deploy.yml deploys the back end
+# and Amplify builds the front end.
 #
 # No path filters on purpose: a required check that never runs (because its
 # paths didn't change) leaves the PR stuck on "Expected", so both jobs always

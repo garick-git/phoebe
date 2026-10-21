@@ -10,6 +10,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# COPY keeps each file's permissions from the machine that builds the image, and
+# the app runs as appuser, so make everything readable (and folders enterable)
+# whatever they were there. A Mac copy with owner-only files failed on 2026-10-21.
+RUN chmod -R a+rX /app
+
 # Collect static files (admin, browsable API) into /app/staticfiles for WhiteNoise.
 # Settings read these variables at import time, so this one command gets throw-away
 # values; nothing is stored in the image's environment.
