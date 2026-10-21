@@ -1,0 +1,135 @@
+# Deploy the back end on every push to main (that is, every merged PR): build the
+# Django image for the server's ARM CPU, smoke-test it, push it to ECR tagged with
+# the commit SHA, and ask the server to deploy that exact commit. Amplify deploys
+# the front end separately.
+#
+# Tests: ci.yml ran on the PR, and the protect-main ruleset only lets green PRs
+# merge, so the suite isn't rerun here. This tests what CI can't: the built image.
+#
+# AWS access is OIDC: GitHub gives this job a short-lived signed token, and AWS
+# trades it for 1-hour credentials for the role phoebe-github-deploy, whose trust
+# policy accepts only this repo's main branch. No AWS keys are stored anywhere.
+# The role can push to the phoebe-web repository and run the SSM document
+# phoebe-deploy on the server, nothing else.
+#
+# The logs of a public repo are public: the account ID is a secret (so GitHub
+# masks it), and nothing here prints the registry address.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    # Front-end-only merges don't restart the back end (Amplify deploys those).
+    # Safe as a filter because this workflow is not a required check.
+    paths-ignore:
+      - "frontend/**"
+      - "amplify.yml"
+      - "customHttp.yml"
+  workflow_dispatch: # "Run workflow" redeploys main's latest commit
+
+permissions:
+  contents: read
+  id-token: write # lets the job ask GitHub for its OIDC token
+
+# One deploy at a time, in merge order, and never cancel one halfway (it could be
+# in the middle of a migration).
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash # bash -eo pipefail: a failed command in a pipe fails the step
+
+jobs:
+  deploy:
+    name: deploy
+    # Native ARM: the server is a t4g (Graviton), so the image must be linux/arm64.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    env:
+      AWS_REGION: us-east-2
+      REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-2.amazonaws.com
+      IMAGE_NAME: phoebe-web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Get AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/phoebe-github-deploy
+          aws-region: us-east-2
+          mask-aws-account-id: true
+
+      # Tags are immutable, so a re-run for the same commit reuses its image.
+      - name: Is this commit already in ECR?
+        id: ecr
+        run: |
+          count=$(aws ecr batch-get-image --repository-name "$IMAGE_NAME" \
+            --image-ids imageTag="$GITHUB_SHA" --query 'length(images)' --output text)
+          if [ "$count" = "1" ]; then exists=true; else exists=false; fi
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
+          echo "image for $GITHUB_SHA already in ECR: $exists"
+
+      - name: Build the image
+        if: steps.ecr.outputs.exists == 'false'
+        run: docker build --tag phoebe-web:candidate .
+
+      # CI tested the source; this tests the image. The ephemeris excerpt must be
+      # inside it (the passes endpoint needs it), and Gunicorn must find
+      # gunicorn.conf.py in /app (the image's CMD relies on it): 2 workers means
+      # the file was read; without it Gunicorn would start 1. Dummy settings only.
+      - name: Smoke-test the image
+        if: steps.ecr.outputs.exists == 'false'
+        run: |
+          docker run --rm \
+            -e DJANGO_SECRET_KEY=smoke-test-only \
+            -e POSTGRES_DB=x -e POSTGRES_USER=x -e POSTGRES_PASSWORD=x \
+            phoebe-web:candidate sh -ec '
+              pytest -q -p no:cacheprovider satellites/tests/test_ephemeris.py
+              gunicorn --print-config config.wsgi:application | grep -E "^(config|workers|bind) "
+              gunicorn --print-config config.wsgi:application | grep -Eq "^workers += 2$"
+            '
+
+      - name: Push to ECR
+        if: steps.ecr.outputs.exists == 'false'
+        run: |
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$REGISTRY" > /dev/null
+          docker tag phoebe-web:candidate "$REGISTRY/$IMAGE_NAME:$GITHUB_SHA"
+          docker push --quiet "$REGISTRY/$IMAGE_NAME:$GITHUB_SHA" > /dev/null
+          docker logout "$REGISTRY" > /dev/null
+          echo "pushed $IMAGE_NAME:$GITHUB_SHA"
+
+      # Run Command is asynchronous: send, then poll until the server reports a
+      # final status. The document's own timeout is 600 s, so poll a little longer.
+      - name: Deploy on the server (SSM phoebe-deploy)
+        env:
+          INSTANCE_ID: ${{ secrets.PHOEBE_INSTANCE_ID }}
+        run: |
+          command_id=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name phoebe-deploy \
+            --parameters "commitSha=$GITHUB_SHA" \
+            --comment "deploy ${GITHUB_SHA:0:12}" \
+            --query Command.CommandId --output text)
+          echo "SSM command $command_id"
+          status=Pending
+          for _ in $(seq 1 130); do
+            sleep 5
+            status=$(aws ssm get-command-invocation --command-id "$command_id" \
+              --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Pending|InProgress|Delayed) ;; *) break ;; esac
+          done
+          echo "----- server output -----"
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+            --query '[StandardOutputContent, StandardErrorContent]' --output text
+          echo "----- status: $status -----"
+          [ "$status" = "Success" ]
+
+      - name: Check the API from outside
+        run: |
+          curl -fsS -o /dev/null -w "HTTP %{http_code} in %{time_total} s\n" \
+            --retry 5 --retry-delay 3 --retry-all-errors --max-time 15 \
+            https://phoebe-api.garickm.com/api/satellites/25544/

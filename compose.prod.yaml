@@ -1,5 +1,16 @@
 # Production stack for the EC2 server. Local development uses compose.yaml instead.
-# Run on the server with: docker compose -f compose.prod.yaml up -d --build
+#
+# The server builds nothing. On every merge to main, GitHub Actions (deploy.yml)
+# builds the web image, pushes it to ECR tagged with the commit SHA, and asks the
+# server to deploy it (SSM document phoebe-deploy, deploy/ssm-phoebe-deploy.yaml).
+# scripts/deploy.sh then copies this file, the Caddyfile and scripts/ out of that
+# image into ~/phoebe and tags the image phoebe-web:live. See docs/operations.md.
+#
+# The project name is pinned: Compose names volumes after it (phoebe_postgres_data),
+# so a different name, for example from running in another folder, would start
+# Postgres on a new, empty volume.
+name: phoebe
+
 services:
   db:
     image: postgres:18
@@ -14,7 +25,10 @@ services:
       retries: 5
 
   web:
-    build: .
+    # A local tag on the server, never the ECR address (which contains the AWS
+    # account ID; the repo is public). deploy.sh sets PHOEBE_WEB_IMAGE only to run
+    # the migration on the new image before switching phoebe-web:live to it.
+    image: ${PHOEBE_WEB_IMAGE:-phoebe-web:live}
     restart: unless-stopped
     env_file: .env
     depends_on:

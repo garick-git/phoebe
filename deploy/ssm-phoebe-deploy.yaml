@@ -1,0 +1,41 @@
+# Copy of the SSM command document "phoebe-deploy" (us-east-2), created on
+# 2026-10-20 with `aws ssm create-document`. AWS runs the copy stored in AWS, not
+# this file: after changing it, run update-document and update-document-default-version
+# (steps in docs/operations.md). The deploy role (phoebe-github-deploy) may run only
+# this document, only on the Phoebe server.
+schemaVersion: "2.2"
+description: "Phoebe: deploy one commit. Pulls phoebe-web:<commitSha> from ECR, then runs that image's own scripts/deploy.sh."
+parameters:
+  commitSha:
+    type: String
+    description: "Full 40-character git commit SHA (the image tag in ECR)"
+    allowedPattern: "^[0-9a-f]{40}$"
+mainSteps:
+  - action: aws:runShellScript
+    name: deploy
+    inputs:
+      workingDirectory: /home/ssm-user/phoebe
+      timeoutSeconds: "600"
+      runCommand:
+        - |
+          set -eu
+          export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin
+          export AWS_DEFAULT_REGION=us-east-2
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          REGISTRY="$ACCOUNT.dkr.ecr.us-east-2.amazonaws.com"
+          IMAGE="$REGISTRY/phoebe-web:{{ commitSha }}"
+          # Log in, pull, log out: the ECR token never stays on disk.
+          # Output goes to /dev/null so the registry (account ID) never reaches the public Actions log.
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$REGISTRY" > /dev/null
+          status=0
+          docker pull --quiet "$IMAGE" > /dev/null || status=$?
+          docker logout "$REGISTRY" > /dev/null
+          [ "$status" -eq 0 ] || { echo "pull failed for {{ commitSha }}"; exit "$status"; }
+          echo "pulled phoebe-web:{{ commitSha }}"
+          # Run the deploy script that ships inside this same image.
+          SCRIPT=$(mktemp)
+          trap 'rm -f "$SCRIPT"' EXIT
+          CID=$(docker create "$IMAGE")
+          docker cp "$CID:/app/scripts/deploy.sh" "$SCRIPT"
+          docker rm "$CID" > /dev/null
+          bash "$SCRIPT" "$IMAGE"
