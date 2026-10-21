@@ -11,10 +11,11 @@ Nothing secret belongs in this file. It never contains the bucket name, the AWS 
   - `caddy`: the only container with published ports (80 and 443). It gets and renews the Let's Encrypt certificate and redirects HTTP to HTTPS. It also compresses every response (`encode zstd gzip` in the `Caddyfile`), which shrinks the globe's elements response from about 5 MB to about 1 MB.
   - `web`: Django served by Gunicorn (2 workers; settings in `gunicorn.conf.py`, which Gunicorn reads from `/app` on its own). The access log leaves out the query string and the Referer, so visitors' coordinates (`?lat=&lon=` on the passes endpoint) are never logged; `satellites/tests/test_logging.py` guards this. Each line ends with the request time in ms. Static files are served by WhiteNoise and collected when the image is built.
   - `db`: PostgreSQL 18. Its data is in the named volume `postgres_data` and it is reachable only inside the Docker network.
+- **Deploys:** automatic on every merge to `main` (see Deploy an update). The server builds nothing and has no copy of the repo.
 - **Public API:** https://phoebe-api.garickm.com/api/satellites/
 - **Front end:** https://phoebe.garickm.com (AWS Amplify, see below)
 - **Firewall (security group):** inbound 80 and 443 only. There is no SSH port and no key pair; shell access is through AWS Systems Manager Session Manager.
-- **Server role:** Session Manager access, plus an inline policy allowing upload (`s3:PutObject`) and list (`s3:ListBucket`) on the backup bucket only. It has no read or delete permission. Instance metadata requires IMDSv2 with a hop limit of 1, so only the host (not the containers) can use the role.
+- **Server role:** Session Manager access, an inline policy allowing upload (`s3:PutObject`) and list (`s3:ListBucket`) on the backup bucket only (no read or delete), and `phoebe-ecr-pull`, which can pull from the `phoebe-web` image repository but not push. Instance metadata requires IMDSv2 with a hop limit of 1, so only the host (not the containers) can use the role.
 
 ## Open a shell on the server
 
@@ -34,28 +35,62 @@ Idle sessions time out. The containers and cron jobs keep running.
 
 If the server is ever rebuilt, all three must be created again.
 
+The only other files in `~/phoebe` are `compose.prod.yaml`, the `Caddyfile` and `scripts/`. Every deploy copies them out of the deployed image, so never edit them on the server: change them in the repo, and the next deploy installs them.
+
 ## Deploy an update
 
-Edit locally, run the tests, commit and push. Then on the server:
+Deploys are automatic. Merging a pull request into `main` runs `.github/workflows/deploy.yml`, unless the merge only changes `frontend/**`, `amplify.yml` or `customHttp.yml` (Amplify deploys those):
+
+1. GitHub Actions signs in to AWS with **OIDC** as the role `phoebe-github-deploy`. No AWS keys are stored anywhere; the role trusts only this repository's `main` branch.
+2. It builds the image on an ARM runner (the server is ARM) and smoke-tests it: `test_ephemeris.py` runs inside the image, and Gunicorn must report `workers = 2` (proof that it read `gunicorn.conf.py`).
+3. It pushes the image to the private ECR repository `phoebe-web`, tagged with the full commit SHA. Tags are immutable, and ECR keeps the newest 5 images.
+4. It runs the SSM command document `phoebe-deploy` on the server with that SHA. The document accepts nothing but a 40-character SHA, pulls the image, logs out of ECR, and runs the `scripts/deploy.sh` inside that image.
+5. `scripts/deploy.sh` (as root, in `~/phoebe`):
+   - unpacks the image's `compose.prod.yaml`, `Caddyfile` and `scripts/` into a temporary folder;
+   - **migrates before switching:** a throw-away container from the new image runs `migrate` while the old container keeps serving;
+   - only then installs those files in `~/phoebe`, so a failed migration leaves the server exactly as it was;
+   - tags the running image `phoebe-web:previous`, tags the new one `phoebe-web:live`, and recreates only `web` (Postgres and Caddy keep running);
+   - checks that `web` runs the new image, that the API answers over HTTPS, and that Gunicorn booted 2 workers;
+   - restarts Caddy only if the `Caddyfile` changed, and removes images nothing uses.
+6. The workflow prints the server's output and checks the API from outside.
+
+`web` is down for a few seconds while the new container starts (one container, no blue/green switch).
+
+**Watch a deploy:** GitHub → Actions → Deploy. The step "Deploy on the server" shows the server's output, ending in `deploy ok: <sha>`. The logs are public: the account ID and the instance ID are Actions secrets (`AWS_ACCOUNT_ID`, `PHOEBE_INSTANCE_ID`), so they show as `***`, and nothing prints the registry address.
+
+**Migrations must be additive** (for example a new nullable column), because the old code keeps running against the new schema until the switch. Starting the new code first would query columns that don't exist yet. Removing or renaming a column takes two deploys: stop using it first, remove it later.
+
+**Redeploy** the latest `main`: Actions → Deploy → Run workflow. A run for a commit whose image is already in ECR reuses it, and if that image is already running, nothing restarts. "Re-run failed jobs" on a failed run works the same way.
+
+**Roll back** to the image that ran before the last deploy (on the server, from `~/phoebe`):
 
 ```
-cd ~/phoebe && git pull
-sudo docker compose -f compose.prod.yaml up -d --build --no-deps web
+sudo docker tag phoebe-web:previous phoebe-web:live
+sudo docker compose -f compose.prod.yaml up -d --no-deps --force-recreate web
 ```
 
-That rebuilds and restarts only `web`; Postgres keeps running.
+- Safe only if the newer deploy's migrations were additive. The server files (compose file, `Caddyfile`, scripts) stay at the newer version.
+- Keep `--force-recreate`: Compose doesn't reliably notice that a tag now points to a different image.
+- After a rollback, `live` and `previous` are the same image. The next deploy (a fix merged to `main`, or Run workflow) moves forward again.
 
-- **The push includes a migration:** migrate *before* switching to the new code:
-  ```
-  cd ~/phoebe && git pull
-  sudo docker compose -f compose.prod.yaml build web
-  sudo docker compose -f compose.prod.yaml run --rm --no-deps web python manage.py migrate
-  sudo docker compose -f compose.prod.yaml up -d --no-deps web
-  ```
-  The old container keeps serving while the migration runs in a throw-away container from the new image. Starting the new code first would query columns that don't exist yet and return errors until `migrate` finished. This only works for additive migrations (for example a new nullable column), which the old code can ignore. Removing or renaming a column takes two deploys: stop using it first, remove it later.
-- **`Caddyfile` changed:** also run `sudo docker compose -f compose.prod.yaml restart caddy`. The file is mounted, so Compose doesn't notice the change.
-- **Only the server's `.env` changed:** run `sudo docker compose -f compose.prod.yaml up -d --no-deps --force-recreate web`. A container reads its environment only when it is created.
-- **Only a script in `scripts/` changed:** `git pull` is enough, because cron runs the file straight from the repo.
+**Other changes:**
+
+- **Only the server's `.env` changed:** `sudo docker compose -f compose.prod.yaml up -d --no-deps --force-recreate web`. A container reads its environment only when it is created.
+- **The `db` or `caddy` service changed in `compose.prod.yaml`** (for example a new image version): the deploy installs the file but recreates only `web`. Afterwards run `sudo docker compose -f compose.prod.yaml up -d <service>` (for Postgres, take a backup first).
+- **The SSM document:** AWS runs its own stored copy; `deploy/ssm-phoebe-deploy.yaml` is the reviewed copy. After changing it in a PR, upload the file to CloudShell (Actions → Upload file) and run `aws ssm update-document --region us-east-2 --name phoebe-deploy --content file://ssm-phoebe-deploy.yaml --document-format YAML --document-version '$LATEST'`, then `aws ssm update-document-default-version --region us-east-2 --name phoebe-deploy --document-version <the new version>`.
+- **A rebuilt server:** create the server-only files above, copy `compose.prod.yaml` and the `Caddyfile` from the repo into `~/phoebe`, start `sudo docker compose -f compose.prod.yaml up -d db caddy`, restore the database, then Run workflow.
+
+**AWS pieces (us-east-2):**
+
+| Piece | What it is |
+|---|---|
+| ECR repository `phoebe-web` | Private image registry; immutable tags, scan on push, AES-256, lifecycle rule keeps the newest 5 images |
+| IAM OIDC provider `token.actions.githubusercontent.com` | Lets AWS trust GitHub's signed tokens (audience `sts.amazonaws.com`) |
+| IAM role `phoebe-github-deploy` | Trust policy: `StringEquals` on `sub` = `repo:garick-git@132175845/phoebe@1402337069:ref:refs/heads/main` (GitHub's format with the owner's and repository's permanent IDs, so a reused name can't match). Inline policy `phoebe-github-deploy-permissions`: ECR login, push to `phoebe-web` only (no delete), `ssm:SendCommand` for `phoebe-deploy` on the Phoebe server only, read command results |
+| Server role inline policy `phoebe-ecr-pull` | ECR login and pull from `phoebe-web` only |
+| SSM document `phoebe-deploy` | The deploy entry point described above |
+
+**If the OIDC step fails** with `Not authorized to perform sts:AssumeRoleWithWebIdentity`, CloudTrail's event history shows the subject GitHub actually sent (`userIdentity.userName`) for each refused attempt; compare it with the trust policy. In CloudShell: `aws cloudtrail lookup-events --region us-east-2 --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity --max-results 5`. Events can take 5 to 15 minutes to appear.
 
 **Production check:** `sudo docker compose -f compose.prod.yaml exec web python manage.py check --deploy` should report 3 intentional warnings (W005, W008, W021), with 1 check silenced (`mail.E001`, because Phoebe sends no email).
 
@@ -71,7 +106,7 @@ Root's crontab on the host (times are UTC):
 - **`run_ingest.sh`** runs `ingest_satellites` inside the running `web` container, which downloads CelesTrak's active-satellites feed and upserts it. It logs to `/var/log/phoebe/ingest.log`.
 - **`run_backup.sh`** dumps the database and uploads the dump to S3 (see Backups below). It logs to `/var/log/phoebe/backup.log`.
 
-Both scripts run on the host, not in a container: the backup needs the instance role's credentials, which containers can't reach. Both set their own `PATH` (cron's is minimal and lacks `/snap/bin`, where the AWS CLI lives), use `docker compose exec -T` (cron has no terminal), write `ok` or `FAILED` lines with UTC timestamps, and exit non-zero on failure.
+The scripts come from the deployed image: `deploy.sh` copies them into `~/phoebe/scripts/`, so a script change ships with the next deploy. Both scripts run on the host, not in a container: the backup needs the instance role's credentials, which containers can't reach. Both set their own `PATH` (cron's is minimal and lacks `/snap/bin`, where the AWS CLI lives), use `docker compose exec -T` (cron has no terminal), write `ok` or `FAILED` lines with UTC timestamps, and exit non-zero on failure.
 
 **Check last night's runs:**
 
@@ -183,3 +218,5 @@ Then update `EPHEMERIS_PATH` in `satellites/passes.py`, run the tests, remove th
 - After a reboot, the containers come back on their own (`restart: unless-stopped`, Docker enabled at boot) in under a minute. The Session Manager Connect button can be greyed out for about 30 seconds.
 - Unattended upgrades don't reboot the server. If `/var/run/reboot-required` exists, reboot when convenient.
 - Never run `docker compose down -v` on the server: it deletes the database volume.
+- `compose.prod.yaml` pins `name: phoebe`. Compose names the volumes after the project (`phoebe_postgres_data`), so a different project name would start Postgres on a new, empty volume.
+- The AWS CLI opens long output in a pager (`less`); a command pasted while it's open is typed into the pager. Press `q`, and run `export AWS_PAGER=""` at the start of each CloudShell session.
