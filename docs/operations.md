@@ -9,7 +9,7 @@ Nothing secret belongs in this file. It never contains the bucket name, the AWS 
 - **One AWS EC2 server** (t4g.micro, Arm, 1 GB RAM plus a 2 GB swap file) in us-east-2, running Ubuntu Server 24.04 LTS with automatic security updates.
 - **Docker Compose** (`compose.prod.yaml`) runs three containers:
   - `caddy`: the only container with published ports (80 and 443). It gets and renews the Let's Encrypt certificate and redirects HTTP to HTTPS. It also compresses every response (`encode zstd gzip` in the `Caddyfile`), which shrinks the globe's elements response from about 5 MB to about 1 MB.
-  - `web`: Django served by Gunicorn (2 workers; settings in `gunicorn.conf.py`, which Gunicorn reads from `/app` on its own). The access log leaves out the query string and the Referer, so visitors' coordinates (`?lat=&lon=` on the passes endpoint) are never logged; `satellites/tests/test_logging.py` guards this. Each line ends with the request time in ms. Static files are served by WhiteNoise and collected when the image is built.
+  - `web`: Django served by Gunicorn (2 worker processes × 4 threads, so a slow Ask Phoebe question doesn't block other requests; settings in `gunicorn.conf.py`, which Gunicorn reads from `/app` on its own). The access log leaves out the query string and the Referer, so visitors' coordinates (`?lat=&lon=` on the passes endpoint) are never logged; `satellites/tests/test_logging.py` guards this. Each line ends with the request time in ms. Static files are served by WhiteNoise and collected when the image is built.
   - `db`: PostgreSQL 18. Its data is in the named volume `postgres_data` and it is reachable only inside the Docker network.
 - **Deploys:** automatic on every merge to `main` (see Deploy an update). The server builds nothing and has no copy of the repo.
 - **Public API:** https://phoebe-api.garickm.com/api/satellites/
@@ -29,7 +29,7 @@ Idle sessions time out. The containers and cron jobs keep running.
 
 | File | Holds | Notes |
 |---|---|---|
-| `~/phoebe/.env` | Django and Postgres settings: `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_HSTS_SECONDS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `DJANGO_ADMIN_PATH`, `DJANGO_CORS_ALLOWED_ORIGINS`, `POSTGRES_*` | Mode 600. Secrets were generated on the server with `openssl rand`. Read single lines with `grep '^NAME=' .env`; never print the whole file. |
+| `~/phoebe/.env` | Django and Postgres settings: `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_HSTS_SECONDS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `DJANGO_ADMIN_PATH`, `DJANGO_CORS_ALLOWED_ORIGINS`, `POSTGRES_*`, `ANTHROPIC_API_KEY` (Ask Phoebe; optionally `ASK_PHOEBE_MODEL` and `ASK_PHOEBE_DAILY_BUDGET_USD`) | Mode 600. Secrets were generated on the server with `openssl rand`. Read single lines with `grep '^NAME=' .env`; never print the whole file. |
 | `/etc/phoebe/backup.env` | `BACKUP_BUCKET` | Root-owned, mode 600. Keeps the bucket name (which contains the account ID) out of the repo. |
 | Root's crontab | The two daily jobs below | View with `sudo crontab -l`. |
 
@@ -210,6 +210,30 @@ docker compose exec web python -m jplephem excerpt <start yyyy/mm/dd> <end yyyy/
 ```
 
 Then update `EPHEMERIS_PATH` in `satellites/passes.py`, run the tests, remove the old file with `git rm`, and delete `data/de421.bsp`. Keep every body (no `--targets`): skyfield's `apparent()` needs Jupiter and Saturn as well as the Sun and Earth. DE421 itself covers 1899–2053. Never put the file in a folder named `data` (`.gitignore` ignores those at any depth).
+
+## Ask Phoebe (Claude API)
+
+`POST /api/ask/` with `{"question": "..."}` answers with Claude, which calls three read-only tools (`ask/tools.py`): satellite lookup, passes (`find_passes()`), and Open-Meteo's cloud forecast. Code: `ask/service.py` (the tool-use loop and its limits), `ask/claude.py` (the HTTP client, plain httpx), `ask/places.py` (Open-Meteo geocoding and forecast from the server).
+
+**Three spending layers:**
+1. **Per IP:** `ask_burst` 5/min and `ask_day` 20/day (DRF throttles in each worker's memory, so up to about 2x and reset on deploy), on top of the API-wide 60/min.
+2. **Site-wide per UTC day:** `ASK_PHOEBE_DAILY_BUDGET_USD` (default 0.15), counted exactly in the `ask_dailyusage` table from each reply's token counts at list price (`ask/budget.py`). When it's spent, Ask answers 503 `daily_budget` with `Retry-After` until midnight UTC, without calling Claude.
+3. **Anthropic Console:** the key belongs to the **Phoebe** workspace, whose monthly spend limit is the hard stop (the default workspace can't have one). An organization limit is also set under Billing → Spend limits. When it's reached, Ask answers 503 `spend_limit`.
+
+**The key:** only in the server's `.env` (and optionally the Mac's, for local testing). Never in the repo, CI, logs or a chat. Add it without it appearing on screen or in shell history (the leading `\n` matters: if `.env` doesn't end in a newline, the key would be glued onto the previous line, which happened on 2026-10-21), then recreate `web`:
+
+```
+read -rs KEY && printf '\nANTHROPIC_API_KEY=%s\n' "$KEY" >> .env && unset KEY
+grep -c '^ANTHROPIC_API_KEY=' .env    # 1 (never print the line itself)
+sudo docker compose -f compose.prod.yaml up -d --no-deps --force-recreate web
+```
+
+To rotate it: create a new key in the Phoebe workspace, replace the line (`sed -i '/^ANTHROPIC_API_KEY=/d' .env`, then the `read` step), recreate `web`, then delete the old key in the Console. **To switch Ask off:** remove the line and recreate `web` (Ask answers 503 `not_configured`).
+
+**Usage:** the admin's **Daily usage** page (read-only), or
+`sudo docker compose -f compose.prod.yaml exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select * from ask_dailyusage order by day desc limit 7"'`. The Console's usage page is the real bill.
+
+**Errors in the log** carry only the kind, HTTP status and Anthropic's error type, never the question or a place: `busy` (429/529/5xx), `timeout`, `spend_limit`, `config` (logged as an error: a bad key or a request the API rejected). Tests never call the real API (`ask/tests/conftest.py` fails any test that tries).
 
 ## Gotchas
 

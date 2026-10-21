@@ -7,20 +7,34 @@ Access-Control-Allow-Origin naming the page's own origin. This middleware adds
 that header for an exact-match allowlist, and only on /api/ URLs.
 
 Why our own middleware instead of django-cors-headers: the package's latest
-release (4.9.0) declares support up to Django 6.0, and this project runs 6.1.
-The API is GET-only with no cookies or custom headers, so browsers send "simple"
-requests with no preflight (OPTIONS) to answer. When Ask Phoebe adds a JSON POST
-(Week 4), preflight handling goes here, or we switch to the package once it
-supports our Django version.
+release (4.9.0, checked again on 2026-10-21) declares support up to Django 6.0,
+and this project runs 6.1.
+
+Preflight: GETs with no custom headers are "simple" requests, sent directly.
+Ask Phoebe's POST with `Content-Type: application/json` is not, so the browser
+first sends an OPTIONS request with Access-Control-Request-Method asking
+permission. This middleware answers that itself, before DRF or the throttles
+see it, so a preflight never uses up anyone's question allowance.
 """
 
 from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.http import HttpResponse
 from django.utils.cache import patch_vary_headers
 
 API_PREFIX = "/api/"
+
+# What a preflight may ask for. Only what the API actually uses: GET for
+# everything, POST for Ask Phoebe, and Content-Type for its JSON body. No
+# credentials (cookies) are ever allowed cross-origin.
+PREFLIGHT_ALLOW_METHODS = "GET, POST"
+PREFLIGHT_ALLOW_HEADERS = "Content-Type"
+# How long the browser may reuse a preflight answer, in seconds. Chrome caps
+# this at 2 hours (7200) and Firefox at 24; 2 hours means a visitor asking
+# several questions sends one preflight, not one per question.
+PREFLIGHT_MAX_AGE = "7200"
 
 
 def parse_allowed_origins(raw):
@@ -32,7 +46,7 @@ def parse_allowed_origins(raw):
     A wildcard ("*") is rejected on purpose.
     """
     origins = []
-    for item in raw.split(","):
+    for position, item in enumerate(raw.split(","), start=1):
         origin = item.strip()
         if not origin:
             continue
@@ -45,9 +59,12 @@ def parse_allowed_origins(raw):
             or parts.fragment
             or origin != origin.lower()
         ):
+            # Never echo the value: if a .env line lost its newline, the next
+            # line (possibly a secret) is part of it. Happened on 2026-10-21.
             raise ImproperlyConfigured(
-                f"DJANGO_CORS_ALLOWED_ORIGINS: {origin!r} is not an origin like "
-                "https://example.com (lowercase, no path, no trailing slash)."
+                f"DJANGO_CORS_ALLOWED_ORIGINS: item {position} is not an origin like "
+                "https://example.com (lowercase, no path, no trailing slash). Check "
+                "it with: grep '^DJANGO_CORS_ALLOWED_ORIGINS=' .env"
             )
         origins.append(origin)
     return origins
@@ -58,16 +75,36 @@ class ApiCorsMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        response = self.get_response(request)
         if not request.path_info.startswith(API_PREFIX):
-            return response  # the admin and everything else never get CORS
+            # The admin and everything else never get CORS.
+            return self.get_response(request)
+
+        origin = request.headers.get("Origin")
+        allowed = bool(origin) and origin in settings.CORS_ALLOWED_ORIGINS
+
+        if (
+            request.method == "OPTIONS"
+            and "Access-Control-Request-Method" in request.headers
+        ):
+            # A preflight: answer it here (the view never runs). Unknown origins
+            # get an empty 200 with no Allow headers, which the browser treats
+            # as "no", so the real request is never sent.
+            response = HttpResponse(status=200)
+            patch_vary_headers(response, ["Origin"])
+            if allowed:
+                response["Access-Control-Allow-Origin"] = origin
+                response["Access-Control-Allow-Methods"] = PREFLIGHT_ALLOW_METHODS
+                response["Access-Control-Allow-Headers"] = PREFLIGHT_ALLOW_HEADERS
+                response["Access-Control-Max-Age"] = PREFLIGHT_MAX_AGE
+            return response
+
+        response = self.get_response(request)
 
         # The response differs by Origin, so any cache must store one copy per
         # Origin instead of handing one site's permission to another.
         patch_vary_headers(response, ["Origin"])
 
-        origin = request.headers.get("Origin")
-        if origin and origin in settings.CORS_ALLOWED_ORIGINS:
+        if allowed:
             # Echo the one matching origin (the header can't hold a list).
             # Applies to every status, so the page can also read 404s and 429s.
             response["Access-Control-Allow-Origin"] = origin

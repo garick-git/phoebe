@@ -43,8 +43,9 @@ Satellite skywatching app: live 3D globe of active satellites, visible-pass pred
    - Current position: http://127.0.0.1:8000/api/satellites/25544/position/
    - Upcoming passes over a place (rise, peak and set above 10°, plus whether each pass is visible: satellite sunlit and Sun below −6°, with when it appears, its highest visible point and when it disappears, or why not; `lat` and `lon` required and rounded to 2 decimals, `days` 1–7, default 7): http://127.0.0.1:8000/api/satellites/25544/passes/?lat=30.27&lon=-97.74&days=7
    - Globe data (newest orbital elements for every current satellite, one unpaginated list): http://127.0.0.1:8000/api/satellites/elements/
+   - Ask Phoebe (POST JSON; answers 503 "not switched on" unless `ANTHROPIC_API_KEY` is set in `.env`): `curl -s -X POST http://127.0.0.1:8000/api/ask/ -H "Content-Type: application/json" -d '{"question": "When can I see the ISS from Austin this week?"}' | python3 -m json.tool`
 
-   The API is read-only and rate limited (60 requests a minute per client), locally too.
+   The API is read-only and rate limited (60 requests a minute per client; Ask Phoebe also 5 a minute and 20 a day), locally too.
 
 ## Run the front end locally
 

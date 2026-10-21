@@ -1,8 +1,22 @@
 from django.db import models
-from django.db.models import F, Subquery
+from django.db.models import Case, F, IntegerField, Subquery, Value, When
 
 
 class SatelliteQuerySet(models.QuerySet):
+    def rank_by_name(self, term):
+        """Best name matches first: exact name, then names starting with the
+        term, then the rest; ties by NORAD ID (oldest object first). Only
+        orders, doesn't filter. Shared by the search endpoint and Ask
+        Phoebe's satellite lookup, so both rank the same way."""
+        return self.annotate(
+            match_rank=Case(
+                When(name__iexact=term, then=Value(0)),
+                When(name__istartswith=term, then=Value(1)),
+                default=Value(2),
+                output_field=IntegerField(),
+            )
+        ).order_by("match_rank", "norad_cat_id")
+
     def current(self):
         """Satellites in the most recent ingest's feed.
 

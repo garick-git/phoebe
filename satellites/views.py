@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from django.db.models import Case, F, IntegerField, Value, When
+from django.db.models import F
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -92,17 +92,9 @@ class SatelliteViewSet(viewsets.ReadOnlyModelViewSet):
             filters.SearchFilter.search_param, ""
         ).strip()
         if term:
-            # Best matches first: exact name, then names starting with the
-            # term, then names that merely contain it (SearchFilter does the
-            # filtering afterward; this only decides the order).
-            queryset = queryset.annotate(
-                match_rank=Case(
-                    When(name__iexact=term, then=Value(0)),
-                    When(name__istartswith=term, then=Value(1)),
-                    default=Value(2),
-                    output_field=IntegerField(),
-                )
-            ).order_by("match_rank", "norad_cat_id")
+            # Best matches first (SearchFilter does the filtering afterward;
+            # this only decides the order).
+            queryset = queryset.rank_by_name(term)
         return queryset
 
     @action(detail=False, methods=["get"])
