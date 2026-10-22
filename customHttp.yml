@@ -1,6 +1,5 @@
 # Security headers for the front end on Amplify Hosting (brief 6b).
 # next.config.ts headers() doesn't apply to a static export, so they are set here.
-# A Content-Security-Policy is added on the Oct 31 checklist, once the globe and API calls exist.
 applications:
   - appRoot: frontend
     customHeaders:
@@ -20,3 +19,21 @@ applications:
           # Location only for Phoebe itself ("Use my location"); no camera or microphone.
           - key: 'Permissions-Policy'
             value: 'geolocation=(self), camera=(), microphone=()'
+          # Content-Security-Policy: which sources the browser may load or contact.
+          # Tested on Oct 22 against the built pages with this exact policy: the
+          # globe (texture, positions worker), Tonight, Ask Phoebe, About and a
+          # Sentry error, with 0 violations. Violations from real visitors are
+          # reported to Sentry (phoebe-web; the key in the URL is public, send-only).
+          # - script-src 'unsafe-inline': the static export puts inline <script>
+          #   tags on every page (Next's page data), with hashes that change every
+          #   build; a static host can't add per-request nonces. XSS protection
+          #   therefore rests on React's escaping, plus connect-src below.
+          # - connect-src: the only outside hosts the page or its worker may
+          #   contact: Phoebe's API, Open-Meteo (city search, clouds), Sentry,
+          #   PostHog. A new one must be added here, or the browser blocks it.
+          # - object-src, base-uri, form-action, frame-ancestors: shut what the
+          #   site never uses (plugins, <base> rewrites, form posts, framing).
+          # Playwright can't see this header (it serves out/ without it), so
+          # check the live site's console after any change.
+          - key: 'Content-Security-Policy'
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://phoebe-api.garickm.com https://geocoding-api.open-meteo.com https://api.open-meteo.com https://o4512301163347968.ingest.us.sentry.io https://us.i.posthog.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri https://o4512301163347968.ingest.us.sentry.io/api/4512301220823040/security/?sentry_key=e45d3170ebd6c4dba1510f00182ca10d"

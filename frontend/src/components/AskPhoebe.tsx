@@ -13,6 +13,7 @@ import {
   type AskResponse,
   type PassGroup,
 } from "@/lib/ask";
+import { track } from "@/lib/analytics";
 import { fetchCloudForecast } from "@/lib/forecast";
 import { buildPassCards, zoneName } from "@/lib/plainPass";
 import { verifyAnswer, type Verification } from "@/lib/verifyAnswer";
@@ -178,25 +179,40 @@ export default function AskPhoebe() {
     const id = ++nextId.current;
     setState({ status: "loading", id, question: text });
     setQuestion("");
+    track("ask_question_asked", {});
 
     let response: AskResponse;
     try {
       response = await postAsk(text, controller.signal);
     } catch (error) {
       if (controller.signal.aborted) return;
-      const message = askErrorMessage(error instanceof AskError ? error : new AskError(null));
+      const askError = error instanceof AskError ? error : new AskError(null);
+      const message = askErrorMessage(askError);
+      track("ask_answer_shown", {
+        outcome: "error",
+        error_code: askError.code ?? (askError.status === null ? "network" : `http_${askError.status}`),
+        visible_passes: 0,
+      });
       setState({ status: "error", id, question: text, message });
       setQuestion(text); // so trying again is one tap
       return;
     }
 
     const groups = passGroups(response.tools);
+    const verification = verifyAnswer(response.answer, response.tools);
+    // Whether verification passed is the number that matters for monitoring
+    // Ask Phoebe in production; never the question or the answer.
+    track("ask_answer_shown", {
+      outcome: verification.ok ? "verified" : "fallback",
+      error_code: null,
+      visible_passes: groups.reduce((sum, group) => sum + group.visible.length, 0),
+    });
     setState({
       status: "done",
       id,
       question: text,
       response,
-      verification: verifyAnswer(response.answer, response.tools),
+      verification,
       groups,
       at: Date.now(),
       forecasts: {},

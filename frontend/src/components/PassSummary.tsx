@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import PassCard from "@/components/PassCard";
+import { track } from "@/lib/analytics";
 import { fetchCloudForecast } from "@/lib/forecast";
 import { fetchPasses, PASS_DAYS, PassesError, type PassesResponse } from "@/lib/passes";
 import type { Place } from "@/lib/place";
@@ -122,6 +123,19 @@ export default function PassSummary({ place }: { place: Place }) {
     });
     return buildPassCards(satellites, nowMs, place.timeZone, forecast);
   }, [current, allDone, nowMs, place.timeZone, forecast]);
+
+  // Count each place's predictions once, when its cards first appear (not on
+  // every minute tick or forecast update). Only counts, never the place.
+  const trackedKey = useRef("");
+  useEffect(() => {
+    if (!cards || trackedKey.current === key) return;
+    trackedKey.current = key;
+    track("tonight_passes_shown", {
+      visible_tonight: cards.tonight.length,
+      visible_later: cards.later.length,
+      failed_satellites: failedSats.length,
+    });
+  }, [cards, key, failedSats.length]);
 
   if (!cards || !current) {
     return (

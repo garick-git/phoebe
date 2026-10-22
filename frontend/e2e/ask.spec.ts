@@ -8,7 +8,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import chicago from "../src/lib/__fixtures__/ask-chicago.json";
-import { blockOutside, fulfillApi, stubCloudForecast } from "./stubs";
+import { blockOutside, fulfillApi, openDialog, stubCloudForecast } from "./stubs";
 
 // "searched_from": "Wed Oct 21, 3:44 pm CDT" in the fixture.
 const ASKED_AT = new Date("2026-10-21T20:45:00Z");
@@ -31,9 +31,8 @@ test.beforeEach(async ({ page }) => {
 
 async function openFromHeader(page: Page) {
   await page.goto("/tonight/");
-  await page.getByRole("button", { name: "Ask Phoebe" }).click();
   const dialog = page.getByRole("dialog", { name: "Ask Phoebe" });
-  await expect(dialog).toBeVisible();
+  await openDialog(dialog, () => page.getByRole("button", { name: "Ask Phoebe" }).click());
   return dialog;
 }
 
@@ -115,11 +114,11 @@ test("keyboard only: open, pick an example, close with Escape, focus returns", a
   await stubAsk(page, 200, chicago);
   await page.goto("/tonight/");
   const open = page.getByRole("button", { name: "Ask Phoebe" });
-  await open.focus();
-  await page.keyboard.press("Enter");
-
   const dialog = page.getByRole("dialog", { name: "Ask Phoebe" });
-  await expect(dialog).toBeVisible();
+  await openDialog(dialog, async () => {
+    await open.focus();
+    await page.keyboard.press("Enter");
+  });
   // Focus moved into the dialog (the native default: its first focusable, Close).
   await expect(dialog.getByRole("button", { name: "Close Ask Phoebe" })).toBeFocused();
 
@@ -141,7 +140,8 @@ test.describe("on a phone", () => {
   test("the tab bar's Ask button opens the drawer", async ({ page }) => {
     await page.goto("/tonight/");
     await expect(page.getByRole("button", { name: "Ask Phoebe" })).toBeHidden(); // header button is desktop-only
-    await page.getByRole("button", { name: "Ask", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Ask Phoebe" })).toBeVisible();
+    await openDialog(page.getByRole("dialog", { name: "Ask Phoebe" }), () =>
+      page.getByRole("button", { name: "Ask", exact: true }).click(),
+    );
   });
 });

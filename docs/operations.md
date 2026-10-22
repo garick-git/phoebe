@@ -165,14 +165,15 @@ This restores into a **new, empty scratch database on a laptop**, never into the
 
 - **What:** the Next.js app in `frontend/` is a static export, hosted by **AWS Amplify Hosting** (us-east-2) on its CDN. There is no Next.js server and no compute charge.
 - **Build:** `amplify.yml` at the repo root (monorepo, `appRoot: frontend`): Node from `frontend/.nvmrc`, `npm ci`, `npm run build`, publish `frontend/out/`. A push to `main` triggers a build.
-- **Headers:** `customHttp.yml` at the repo root (HSTS, nosniff, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, `Permissions-Policy`). `next.config.ts` `headers()` does not apply to a static export.
+- **Headers:** `customHttp.yml` at the repo root (HSTS, nosniff, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, `Permissions-Policy`, `Content-Security-Policy`). `next.config.ts` `headers()` does not apply to a static export. **A new outside host the browser talks to must be added to the CSP's `connect-src`**, or the browser blocks it; Playwright can't see these headers (it serves `out/` without them), so check the live site's console after a change.
+- **Monitoring (build-time environment variables, Amplify console only):** `NEXT_PUBLIC_SENTRY_DSN` (the `phoebe-web` project's DSN) and `NEXT_PUBLIC_POSTHOG_KEY` (PostHog's public project key). Both are public by design (they end up in the JavaScript); without them the build sends nothing. Changing either needs a new build (they're baked in).
 - **Console settings that are not in the repo:**
   - Platform **`WEB`** with framework **`Next.js - SSG`**. Amplify auto-detects Next.js as SSR (`WEB_COMPUTE`), and the deploy then fails with `Can't find required-server-files.json in build output directory`. Fix from CloudShell:
     ```
     aws amplify update-app --app-id <app-id> --platform WEB --region us-east-2
     aws amplify update-branch --app-id <app-id> --branch-name main --framework "Next.js - SSG" --region us-east-2
     ```
-  - Environment variables: `AMPLIFY_MONOREPO_APP_ROOT=frontend` (must match `appRoot`) and `AMPLIFY_DIFF_DEPLOY=true`.
+  - Environment variables: `AMPLIFY_MONOREPO_APP_ROOT=frontend` (must match `appRoot`), `AMPLIFY_DIFF_DEPLOY=true`, `NEXT_PUBLIC_SENTRY_DSN` and `NEXT_PUBLIC_POSTHOG_KEY`.
   - **Rewrites and redirects: empty (`[]`).** Unknown URLs then get a real `404` status, but with an empty body, so the browser shows its own error page rather than Phoebe's `404.html`. Tested on 2026-10-14:
     - The default rule for new apps (`/<*>` → `/index.html`, `404-200`) turned every unknown URL into the home page with status 200 (a "soft 404"). Removed.
     - A `/<*>` → `/404.html` rule with status `404` (the custom 404 page example in AWS's docs) answered with a `302` redirect to `/404.html`, which then returned `200`. The same happened with `/404/index.html` as the target.

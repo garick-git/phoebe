@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import CitySearch from "@/components/CitySearch";
 import PassSummary from "@/components/PassSummary";
+import { track } from "@/lib/analytics";
 import type { GeocodedPlace } from "@/lib/geocoding";
 import {
   cleanLabel,
@@ -56,6 +57,7 @@ export default function TonightApp() {
 
   function pickCity(city: GeocodedPlace) {
     setLocationError("");
+    track("tonight_place_chosen", { source: "search" });
     go({
       lat: roundCoord(city.lat),
       lon: roundCoord(city.lon),
@@ -74,6 +76,7 @@ export default function TonightApp() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocating(false);
+        track("tonight_place_chosen", { source: "location" });
         // Rounded here, in the browser, before it goes into the URL or any request.
         go({
           lat: roundCoord(position.coords.latitude),

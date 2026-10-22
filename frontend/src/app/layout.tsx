@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Monitoring from "@/components/Monitoring";
 import SiteChrome from "@/components/SiteChrome";
 import { defaultMetadata } from "@/lib/site";
 import { geistMono, geistSans } from "./fonts";
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         >
           {children}
         </main>
+        <Monitoring />
       </body>
     </html>
   );
