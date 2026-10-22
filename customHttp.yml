@@ -5,9 +5,11 @@ applications:
     customHeaders:
       - pattern: '**/*'
         headers:
-          # HTTPS only. 1 hour to start (same as the API); raised to 1 year before launch.
+          # HTTPS only, remembered by browsers for a year (raised from 1 hour on
+          # Oct 22, after 8 clean days). This hostname only: no includeSubDomains
+          # or preload, so other garickm.com names are unaffected.
           - key: 'Strict-Transport-Security'
-            value: 'max-age=3600'
+            value: 'max-age=31536000'
           - key: 'X-Content-Type-Options'
             value: 'nosniff'
           # No other site may show Phoebe in a frame (clickjacking).

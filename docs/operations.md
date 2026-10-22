@@ -29,11 +29,13 @@ Idle sessions time out. The containers and cron jobs keep running.
 
 | File | Holds | Notes |
 |---|---|---|
-| `~/phoebe/.env` | Django and Postgres settings: `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_HSTS_SECONDS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `DJANGO_ADMIN_PATH`, `DJANGO_CORS_ALLOWED_ORIGINS`, `POSTGRES_*`, `ANTHROPIC_API_KEY` (Ask Phoebe; optionally `ASK_PHOEBE_MODEL` and `ASK_PHOEBE_DAILY_BUDGET_USD`), `SENTRY_DSN` (error tracking; unset = off) | Mode 600. Secrets were generated on the server with `openssl rand`. Read single lines with `grep '^NAME=' .env`; never print the whole file. |
+| `~/phoebe/db.env` | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Mode 600. Read by both containers; the only file the `db` container sees, so Postgres never holds Django's or Claude's secrets (split from `.env` on Oct 22). `deploy.sh` refuses to run without it. |
+| `~/phoebe/.env` | Django settings (read only by `web`): `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_HSTS_SECONDS` (31536000, one year, since Oct 22), `DJANGO_CSRF_TRUSTED_ORIGINS`, `DJANGO_ADMIN_PATH`, `DJANGO_CORS_ALLOWED_ORIGINS`, `ANTHROPIC_API_KEY` (Ask Phoebe; optionally `ASK_PHOEBE_MODEL` and `ASK_PHOEBE_DAILY_BUDGET_USD`), `SENTRY_DSN` (error tracking; unset = off) | Mode 600. Secrets were generated on the server with `openssl rand`. Read single lines with `grep '^NAME=' .env`; never print the whole file. |
 | `/etc/phoebe/backup.env` | `BACKUP_BUCKET` | Root-owned, mode 600. Keeps the bucket name (which contains the account ID) out of the repo. |
 | Root's crontab | The two daily jobs below | View with `sudo crontab -l`. |
+| `/etc/apt/apt.conf.d/52phoebe-auto-reboot` | `Automatic-Reboot "true"`, `Automatic-Reboot-Time "09:30"` | Unattended-upgrades reboots at 09:30 UTC (after the backup) only when an update needs it. Check with `apt-config dump \| grep -i Automatic-Reboot`. |
 
-If the server is ever rebuilt, all three must be created again.
+If the server is ever rebuilt, all five must be created again.
 
 The only other files in `~/phoebe` are `compose.prod.yaml`, the `Caddyfile` and `scripts/`. Every deploy copies them out of the deployed image, so never edit them on the server: change them in the repo, and the next deploy installs them.
 
@@ -143,7 +145,7 @@ Look for `ingest ok` and `backup ok: db/phoebe-<timestamp>.dump, <bytes>`.
 
 - **What:** a daily `pg_dump -Fc` (PostgreSQL custom format, compressed) of the whole database, about 2 to 3 MiB as of October 2026.
 - **How:** the dump goes to a temp file. The script checks it (more than 1 KB, and `pg_restore --list` can read it), then uploads it with server-side encryption. Checking before uploading matters because the server can't delete a bad object once it's in the bucket.
-- **Where:** a private S3 bucket in us-east-2, at `db/phoebe-<UTC timestamp>.dump`. Block Public Access is on, encryption is SSE-S3, and versioning is off.
+- **Where:** a private S3 bucket in us-east-2, at `db/phoebe-<UTC timestamp>.dump`. Block Public Access is on, encryption is SSE-S3, and **versioning is on** (since Oct 22): an upload over an existing name keeps the old copy for 7 days, so even a hacked server (which can upload but not delete) can't destroy a backup. The lifecycle rule `expire-backups-30d` expires current versions after 30 days, deletes noncurrent versions 7 days later, and removes expired delete markers.
 - **Retention:** an S3 lifecycle rule deletes each object 30 days after it's created.
 
 **List the backups** (on the server):
@@ -262,7 +264,7 @@ To rotate it: create a new key in the Phoebe workspace, replace the line (`sed -
 - Check which terminal you're in before pasting (Mac versus server prompt).
 - `psql` and `git log` open a pager (`(END)` at the bottom). Press `q` to leave it. `docker compose exec -T` avoids it.
 - After a reboot, the containers come back on their own (`restart: unless-stopped`, Docker enabled at boot) in under a minute. The Session Manager Connect button can be greyed out for about 30 seconds.
-- Unattended upgrades don't reboot the server. If `/var/run/reboot-required` exists, reboot when convenient.
+- Unattended upgrades reboot the server by themselves at 09:30 UTC when an update needs it (about 40 seconds down; see the auto-reboot file above). A manual `sudo reboot` is still fine at any time.
 - Never run `docker compose down -v` on the server: it deletes the database volume.
 - `compose.prod.yaml` pins `name: phoebe`. Compose names the volumes after the project (`phoebe_postgres_data`), so a different project name would start Postgres on a new, empty volume.
 - The AWS CLI opens long output in a pager (`less`); a command pasted while it's open is typed into the pager. Press `q`, and run `export AWS_PAGER=""` at the start of each CloudShell session.

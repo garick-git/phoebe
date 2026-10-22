@@ -15,7 +15,10 @@ services:
   db:
     image: postgres:18
     restart: unless-stopped
-    env_file: .env
+    # Only the database's own settings (POSTGRES_DB, POSTGRES_USER,
+    # POSTGRES_PASSWORD). Postgres never sees Django's secret key, the Claude
+    # API key or the Sentry DSN (brief 6b; split on Oct 22).
+    env_file: db.env
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
@@ -30,7 +33,10 @@ services:
     # the migration on the new image before switching phoebe-web:live to it.
     image: ${PHOEBE_WEB_IMAGE:-phoebe-web:live}
     restart: unless-stopped
-    env_file: .env
+    # Django needs the database settings too, so it reads both files.
+    env_file:
+      - db.env
+      - .env
     depends_on:
       db:
         condition: service_healthy
