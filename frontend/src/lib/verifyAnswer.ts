@@ -20,7 +20,9 @@
  *   that crosses midnight). With no day named, any day in the results counts.
  * - Durations: within 1 minute of a tool duration (so floor or round both
  *   pass, "about 4 minutes" for 261 s), and on a line with times, within 1
- *   minute of the pass those times belong to.
+ *   minute of the pass those times belong to. Halves and quarters count as
+ *   part of the number ("4½ minutes", "4 and a half minutes", "½ minute";
+ *   found in a real answer on Oct 22, where "4½" was only checked as a bare 4).
  * - A bare number (a count, a NORAD ID) only has to appear somewhere in the
  *   tool data, or be a count of its passes. That's the loosest rule.
  * - The check fails closed: a number it can't place counts as wrong, and a
@@ -246,8 +248,8 @@ const TOKEN_RE = new RegExp(
     `(?<clock>\\b(?<ch>\\d{1,2})(?::(?<cm>\\d{2}))?\\s*(?<ap>[aApP])\\.?\\s?[mM]\\b\\.?)`,
     // "05:00" (24-hour)
     `(?<clock24>\\b(?<h24>[01]?\\d|2[0-3]):(?<m24>[0-5]\\d)\\b)`,
-    // "about 4 minutes", "76 seconds", "3-day", "7 days"
-    `(?<dur>\\b(?<dn>\\d+(?:\\.\\d+)?)\\s*-?\\s*(?<du>seconds?|secs?|minutes?|mins?|hours?|hrs?|days?)\\b)`,
+    // "about 4 minutes", "76 seconds", "3-day", "7 days", "4½ minutes", "4 and a half minutes", "½ minute"
+    `(?<dur>(?:\\b(?<dn>\\d+(?:\\.\\d+)?)(?<dfrac>[½¼¾])?(?<dhalf>\\s+and\\s+a\\s+half)?|(?<dlone>[½¼¾]))\\s*-?\\s*(?<du>seconds?|secs?|minutes?|mins?|hours?|hrs?|days?)\\b)`,
     // "40%", "40 percent"
     `(?<pct>\\b(?<pn>\\d+(?:\\.\\d+)?)\\s*(?:%|percent\\b))`,
     // "62°", "62 degrees"
@@ -257,6 +259,9 @@ const TOKEN_RE = new RegExp(
   ].join("|"),
   "g",
 );
+
+/** "½" → 0.5, so "4½ minutes" is checked as 4.5. */
+const FRACTIONS: Record<string, number> = { "½": 0.5, "¼": 0.25, "¾": 0.75 };
 
 /** Is a time (minutes after midnight) on one of these days, or just after midnight following one? */
 function timeOnDays(facts: Facts, days: readonly DateKey[] | null, minutes: number, slack: number): boolean {
@@ -335,7 +340,8 @@ function checkLine(line: string, facts: Facts, problems: Problem[]): number {
       }
     } else if (g.dur) {
       checked += 1;
-      durations.push({ n: Number(g.dn), unit: g.du.toLowerCase(), text });
+      const n = Number(g.dn ?? 0) + (FRACTIONS[g.dfrac ?? g.dlone ?? ""] ?? 0) + (g.dhalf ? 0.5 : 0);
+      durations.push({ n, unit: g.du.toLowerCase(), text });
     } else if (g.pct) {
       checked += 1;
       if (!facts.percents.has(Number(g.pn))) problems.push({ kind: "percent", text });

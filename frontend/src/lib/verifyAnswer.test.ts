@@ -121,6 +121,22 @@ describe("verifyAnswer rules", () => {
     ]);
   });
 
+  it.each([
+    // Oct 22's real answer said "At about 4½ minutes" for a 277 s pass (4.6 min);
+    // before the fix only the bare "4" was checked.
+    ["4½ minutes", true],
+    ["4 and a half minutes", true],
+    ["4.5 minutes", true],
+    ["9½ minutes", false],
+    ["2½ minutes", false],
+    ["½ minute", false],
+  ])("reads fractions in durations: %s → ok %s", (duration, ok) => {
+    const answer = `- Sat Oct 24, 6:35 am CDT: highest at 6:37 am, gone at 6:40 am. At about ${duration}, this is the longest pass.`;
+    const result = verifyAnswer(answer, CHICAGO_TOOLS);
+    expect(result.ok).toBe(ok);
+    if (!ok) expect(result.problems.map((p) => p.kind)).toEqual(["duration"]);
+  });
+
   it("checks degrees within 1°", () => {
     // Chicago's first visible pass appears at 18.4° elevation.
     expect(verifyAnswer("It appears 18° up.", CHICAGO_TOOLS).ok).toBe(true);
