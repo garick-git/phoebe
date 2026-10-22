@@ -224,10 +224,12 @@ REST_FRAMEWORK = {
 # the repo, CI or logs). Empty means Ask Phoebe answers 503 "not switched on",
 # which is how local development without a key and CI run.
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-# Opus by default (brief: don't downgrade to save money; the budgets below
-# control cost). A setting so the Oct 30 evaluation can compare models; a
-# model without a price in ask/budget.py stops startup.
-ASK_PHOEBE_MODEL = os.environ.get("ASK_PHOEBE_MODEL", "claude-opus-5-5")
+# Sonnet 5.5 by default since the evaluation (Oct 22): 19/20 against Opus
+# 5.5's 17/20 on the same questions, at half the price (decision log; the
+# brief's rule is "whichever model gives good answers", not cost). Must match
+# gate_model in ask/eval/questions.json (test_evaluation.py checks). A model
+# without a price in ask/budget.py stops startup.
+ASK_PHOEBE_MODEL = os.environ.get("ASK_PHOEBE_MODEL", "claude-sonnet-5-5")
 # Site-wide dollars per UTC day (estimated from token counts), counted
 # exactly in Postgres. With the Console's $5/month workspace limit as the
 # hard stop. Decision log 2026-10-21.

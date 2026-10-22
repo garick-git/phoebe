@@ -50,8 +50,15 @@ jobs:
       # Production dependencies only: the full audit fails on a dev-only
       # finding (braces) that never ships to the browser.
       - run: npm audit --omit=dev
+      # Vitest also scores Ask Phoebe's recorded evaluation (src/eval/), so it
+      # needs ask/eval/ from the checkout; it never calls Claude.
       - run: npm test
       - run: npm run build
+      # End-to-end tests (Playwright) against the static export just built in
+      # out/. Chromium's headless shell only; every outside request is stubbed
+      # in the tests, so nothing here reaches the API, Open-Meteo or Claude.
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: npm run test:e2e
 
   backend:
     name: backend

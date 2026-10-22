@@ -24,7 +24,14 @@
  *   part of the number ("4½ minutes", "4 and a half minutes", "½ minute";
  *   found in a real answer on Oct 22, where "4½" was only checked as a bare 4).
  * - A bare number (a count, a NORAD ID) only has to appear somewhere in the
- *   tool data, or be a count of its passes. That's the loosest rule.
+ *   tool data, or be a count of its passes. That's the loosest rule. It may
+ *   also be the length of the answer's own list ("here are the next 5" above
+ *   exactly 5 list lines; found in the evaluation, Oct 22).
+ * - Facts kept under other names (found in the evaluation's real answers,
+ *   Oct 22): the data's age in days is element_set_age_hours / 24, within
+ *   half a day ("about 7 days old" for 172.9 h); a latitude or longitude is
+ *   degrees ("44.1°S" for -44.1); an orbit period is a duration in minutes
+ *   ("94 minutes" for period_minutes 94.0).
  * - The check fails closed: a number it can't place counts as wrong, and a
  *   false alarm only means the user sees the tool data instead of the prose.
  */
@@ -83,6 +90,8 @@ type Facts = {
   passes: { startS: number; endS: number; seconds: number }[];
   durationsS: number[];
   dayCounts: Set<number>;
+  /** element_set_age_hours / 24: "the orbit data is about 7 days old". */
+  ageDays: number[];
   percents: Set<number>;
   degrees: number[];
   numbers: Set<number>;
@@ -103,6 +112,7 @@ function emptyFacts(): Facts {
     passes: [],
     durationsS: [],
     dayCounts: new Set(),
+    ageDays: [],
     percents: new Set(),
     degrees: [],
     numbers: new Set(),
@@ -163,8 +173,11 @@ function addString(facts: Facts, text: string) {
 function addNumber(facts: Facts, key: string, n: number) {
   facts.numbers.add(n);
   if (key.endsWith("_deg")) facts.degrees.push(n);
+  if (key === "latitude" || key === "longitude") facts.degrees.push(Math.abs(n)); // "44.1°S"
   if (key.endsWith("_s")) facts.durationsS.push(n);
+  if (key === "period_minutes") facts.durationsS.push(n * 60);
   if (key === "days") facts.dayCounts.add(n);
+  if (key === "element_set_age_hours") facts.ageDays.push(n / 24);
 }
 
 function walk(facts: Facts, value: unknown, key: string) {
@@ -301,7 +314,7 @@ function isListMarker(line: string, index: number, length: number): boolean {
   return line.slice(0, index).trim() === "" && /^[.)]\s/.test(line.slice(index + length, index + length + 2));
 }
 
-function checkLine(line: string, facts: Facts, problems: Problem[]): number {
+function checkLine(line: string, facts: Facts, listLength: number, problems: Problem[]): number {
   let checked = 0;
   let context: DateKey[] | null = null; // the day(s) the line has named so far
   const lineSeconds: number[] = []; // wall-clock seconds of the line's checked times
@@ -352,7 +365,8 @@ function checkLine(line: string, facts: Facts, problems: Problem[]): number {
       if (isListMarker(line, m.index ?? 0, m[0].length)) continue;
       checked += 1;
       const n = Number(m[0].replace(/,/g, ""));
-      const known = facts.numbers.has(n) || [...facts.numbers].some((v) => Math.round(v) === n);
+      const known =
+        facts.numbers.has(n) || [...facts.numbers].some((v) => Math.round(v) === n) || (listLength > 0 && n === listLength);
       if (!known) problems.push({ kind: "number", text });
     }
   }
@@ -366,18 +380,23 @@ function checkLine(line: string, facts: Facts, problems: Problem[]): number {
     let ok: boolean;
     if (unit.startsWith("sec")) ok = near(passSeconds, n, 5);
     else if (unit.startsWith("min")) ok = passSeconds.some((s) => Math.abs(s / 60 - n) < 1);
-    else if (unit.startsWith("day")) ok = facts.dayCounts.has(n);
+    else if (unit.startsWith("day")) ok = facts.dayCounts.has(n) || near(facts.ageDays, n, 0.5);
     else ok = near([...facts.dayCounts].map((d) => d * 24), n, 0) || near(facts.numbers, n, 0.5);
     if (!ok) problems.push({ kind: "duration", text });
   }
   return checked;
 }
 
+/** "- …", "* …", "• …" or "1. …" at the start of a line. */
+const LIST_LINE_RE = /^\s*(?:[-*•]|\d+[.)])\s+\S/;
+
 /** Checks every time, date, duration and number in `answer` against `tools`. */
 export function verifyAnswer(answer: string, tools: readonly ToolCall[]): Verification {
   const facts = collectFacts(tools);
   const problems: Problem[] = [];
   let checked = 0;
-  for (const line of answer.split("\n")) checked += checkLine(line, facts, problems);
+  const lines = answer.split("\n");
+  const listLength = lines.filter((line) => LIST_LINE_RE.test(line)).length;
+  for (const line of lines) checked += checkLine(line, facts, listLength, problems);
   return { ok: problems.length === 0, checked, problems };
 }

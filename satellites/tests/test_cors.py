@@ -59,6 +59,16 @@ def test_error_responses_are_readable_by_the_front_end(monkeypatch, client):
     assert not_found.headers[ALLOW] == FRONT_END
     assert throttled.status_code == 429
     assert throttled.headers[ALLOW] == FRONT_END
+    # Retry-After isn't CORS-safelisted: without this, fetch() reads it as
+    # null and Ask Phoebe can't tell the daily limit from the per-minute one.
+    assert "Retry-After" in throttled.headers
+    assert throttled.headers["Access-Control-Expose-Headers"] == "Retry-After"
+
+
+def test_other_origins_are_not_told_what_to_expose(client):
+    response = client.get(LIST_URL, headers={"Origin": "https://evil.example"})
+
+    assert "Access-Control-Expose-Headers" not in response.headers
 
 
 def test_cors_only_applies_under_the_api(client):
