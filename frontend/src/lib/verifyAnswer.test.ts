@@ -147,3 +147,51 @@ describe("verifyAnswer rules", () => {
     expect(verifyAnswer("Every pass is after sunset, high in the south.", CHICAGO_TOOLS).ok).toBe(true);
   });
 });
+
+// Wording from the evaluation's real answers (ask/eval/recordings, Oct 22),
+// with a look_up_satellite result shaped like ask/tools.py's.
+const ISS_LOOKUP: ToolCall[] = [
+  {
+    name: "look_up_satellite",
+    input: { query: "ISS" },
+    is_error: false,
+    result: {
+      best_match: {
+        norad_cat_id: 25544,
+        name: "ISS (ZARYA)",
+        orbit: { period_minutes: 92.9, inclination_deg: 51.6, element_set_age_hours: 172.9 },
+        now: { latitude: -44.1, longitude: -25.8, altitude_km: 432, speed_km_s: 7.65 },
+      },
+      other_matches: [],
+    },
+  },
+];
+
+describe("verifyAnswer: facts kept under other names (evaluation, Oct 22)", () => {
+  it("passes Opus's real ISS answer: position, period and the data's age", () => {
+    const answer =
+      "The International Space Station (ISS) is about **432 km** above Earth right now. It's over the South " +
+      "Atlantic Ocean, at about 44.1°S, 25.8°W, and moving at about 7.65 km per second. It goes around Earth " +
+      "once every 93 minutes.\n\nThese numbers come from tracking data that's about 7 days old.";
+    expect(verifyAnswer(answer, ISS_LOOKUP).problems).toEqual([]);
+  });
+
+  it.each([
+    ["a latitude that isn't the satellite's", "It's at about 45.3°S.", "degrees"],
+    ["a period more than a minute off", "It goes around Earth once every 95 minutes.", "duration"],
+    ["a data age more than half a day off", "The tracking data is about 5 days old.", "duration"],
+  ])("still catches %s", (_label, answer, kind) => {
+    const result = verifyAnswer(answer, ISS_LOOKUP);
+    expect(result.ok).toBe(false);
+    expect(result.problems.map((p) => p.kind)).toEqual([kind]);
+  });
+
+  it("accepts the length of the answer's own list ('here are the next 5' above 5 list lines)", () => {
+    const list = "- Low in the north.\n- Low in the northeast.\n- Partway up in the north.\n- Low in the north.";
+    // Chicago's tool data has no 4 anywhere, so only the list's length can back it.
+    expect(verifyAnswer(`Here are the next 4:\n${list}`, CHICAGO_TOOLS).ok).toBe(true);
+    expect(verifyAnswer(`Here are the next 6:\n${list}`, CHICAGO_TOOLS).problems).toEqual([
+      { kind: "number", text: "6" },
+    ]);
+  });
+});

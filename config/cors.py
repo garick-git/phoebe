@@ -35,6 +35,11 @@ PREFLIGHT_ALLOW_HEADERS = "Content-Type"
 # this at 2 hours (7200) and Firefox at 24; 2 hours means a visitor asking
 # several questions sends one preflight, not one per question.
 PREFLIGHT_MAX_AGE = "7200"
+# Response headers the page's JavaScript may read beyond the CORS-safelisted
+# few (Content-Type and the like). Retry-After tells Ask Phoebe's per-day
+# limit (hours) from the per-minute one, so the page can say "try again
+# tomorrow" instead of "wait a minute" (decision log, Oct 22).
+EXPOSE_HEADERS = "Retry-After"
 
 
 def parse_allowed_origins(raw):
@@ -108,4 +113,5 @@ class ApiCorsMiddleware:
             # Echo the one matching origin (the header can't hold a list).
             # Applies to every status, so the page can also read 404s and 429s.
             response["Access-Control-Allow-Origin"] = origin
+            response["Access-Control-Expose-Headers"] = EXPOSE_HEADERS
         return response
