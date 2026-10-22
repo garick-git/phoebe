@@ -1,0 +1,196 @@
+{
+ "answer": "Sorry, the ISS won't be visible from Austin, Texas, United States in the next 7 days. It does pass overhead, but either during the day, when the sky is too bright to see it, or in the middle of the night, when it's in Earth's shadow and has no sunlight to reflect.\n\nNone of the passes I found this week can be seen, so I can't tell you when the next visible one will be. Check back in a few days, when new passes will come into range.",
+ "complete": true,
+ "tools": [
+  {
+   "name": "get_passes",
+   "input": {
+    "satellite": "ISS",
+    "place": "Austin, Texas",
+    "days": 7
+   },
+   "result": {
+    "satellite": {
+     "norad_cat_id": 25544,
+     "name": "ISS (ZARYA)",
+     "nickname": "ISS",
+     "full_name": "International Space Station"
+    },
+    "place": {
+     "label": "Austin, Texas, United States",
+     "latitude": 30.27,
+     "longitude": -97.74,
+     "timezone": "America/Chicago"
+    },
+    "searched_from": "Wed Oct 21, 3:43 pm CDT",
+    "days": 7,
+    "min_elevation_deg": 10.0,
+    "element_set_age_hours": 28.9,
+    "visible_pass_count": 0,
+    "reasons": {
+     "daylight": "the sky is too bright while it passes",
+     "earth_shadow": "the sky is dark, but the satellite is in Earth's shadow"
+    },
+    "passes": [
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Thu Oct 22, 3:17 am CDT",
+      "max_elevation_deg": 81.7
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Thu Oct 22, 4:54 am CDT",
+      "max_elevation_deg": 10.1
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Thu Oct 22, 11:27 am CDT",
+      "max_elevation_deg": 75.5
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Fri Oct 23, 2:29 am CDT",
+      "max_elevation_deg": 38.1
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Fri Oct 23, 4:06 am CDT",
+      "max_elevation_deg": 16.0
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Fri Oct 23, 10:40 am CDT",
+      "max_elevation_deg": 37.5
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Fri Oct 23, 12:16 pm CDT",
+      "max_elevation_deg": 13.3
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Sat Oct 24, 1:42 am CDT",
+      "max_elevation_deg": 19.6
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Sat Oct 24, 3:19 am CDT",
+      "max_elevation_deg": 26.1
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Sat Oct 24, 9:52 am CDT",
+      "max_elevation_deg": 21.7
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Sat Oct 24, 11:29 am CDT",
+      "max_elevation_deg": 25.2
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Sun Oct 25, 12:55 am CDT",
+      "max_elevation_deg": 10.1
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Sun Oct 25, 2:31 am CDT",
+      "max_elevation_deg": 47.8
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Sun Oct 25, 9:04 am CDT",
+      "max_elevation_deg": 13.6
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Sun Oct 25, 10:41 am CDT",
+      "max_elevation_deg": 50.8
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Mon Oct 26, 1:44 am CDT",
+      "max_elevation_deg": 82.6
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Mon Oct 26, 3:21 am CDT",
+      "max_elevation_deg": 10.0
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Mon Oct 26, 9:54 am CDT",
+      "max_elevation_deg": 76.2
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Tue Oct 27, 12:56 am CDT",
+      "max_elevation_deg": 38.4
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Tue Oct 27, 2:33 am CDT",
+      "max_elevation_deg": 15.8
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Tue Oct 27, 9:06 am CDT",
+      "max_elevation_deg": 37.8
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Tue Oct 27, 10:43 am CDT",
+      "max_elevation_deg": 13.2
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Wed Oct 28, 12:09 am CDT",
+      "max_elevation_deg": 19.7
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Wed Oct 28, 1:45 am CDT",
+      "max_elevation_deg": 25.9
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Wed Oct 28, 8:19 am CDT",
+      "max_elevation_deg": 21.7
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Wed Oct 28, 9:55 am CDT",
+      "max_elevation_deg": 25.0
+     }
+    ]
+   },
+   "is_error": false
+  }
+ ]
+}

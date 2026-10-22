@@ -1,0 +1,252 @@
+{
+ "answer": "From Chicago, Illinois, United States, you can see the ISS 5 times in the next 3 days. Every pass is before sunrise, and all of them stay low over the northern sky, so you'll need a clear view toward the north and northeast.\n\n- Thu Oct 22, 4:59 am CDT: It appears in the northeast, low in the sky, and disappears there at 5:00 am (about 1 minute).\n- Thu Oct 22, 6:33 am CDT: It rises in the northwest, is highest in the north at 6:35 am and sets in the northeast at 6:37 am (about 4 minutes, low the whole time).\n- Fri Oct 23, 5:47 am CDT: It appears in the north, low in the sky, and disappears in the northeast at 5:50 am (about 3 minutes).\n- Sat Oct 24, 5:01 am CDT: It appears in the north, low in the sky, and disappears in the northeast at 5:02 am (about 1 minute).\n- Sat Oct 24, 6:35 am CDT: It rises in the northwest, is highest in the north at 6:37 am and sets in the northeast at 6:40 am (about 5 minutes, low the whole time).\n\nThe two passes that last longest are Thursday at 6:33 am and Saturday at 6:35 am.",
+ "complete": true,
+ "tools": [
+  {
+   "name": "get_passes",
+   "input": {
+    "satellite": "ISS",
+    "place": "Chicago",
+    "days": 3
+   },
+   "result": {
+    "satellite": {
+     "norad_cat_id": 25544,
+     "name": "ISS (ZARYA)",
+     "nickname": "ISS",
+     "full_name": "International Space Station"
+    },
+    "place": {
+     "label": "Chicago, Illinois, United States",
+     "latitude": 41.85,
+     "longitude": -87.65,
+     "timezone": "America/Chicago"
+    },
+    "searched_from": "Wed Oct 21, 3:44 pm CDT",
+    "days": 3,
+    "min_elevation_deg": 10.0,
+    "element_set_age_hours": 28.9,
+    "visible_pass_count": 5,
+    "reasons": {
+     "daylight": "the sky is too bright while it passes",
+     "earth_shadow": "the sky is dark, but the satellite is in Earth's shadow"
+    },
+    "passes": [
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Thu Oct 22, 3:20 am CDT",
+      "max_elevation_deg": 47.4
+     },
+     {
+      "visible": true,
+      "appears": {
+       "when": "Thu Oct 22, 4:59 am CDT",
+       "time": "2026-10-22T04:59:36-05:00",
+       "direction": "northeast",
+       "height": "low",
+       "azimuth_deg": 25.1,
+       "elevation_deg": 18.4
+      },
+      "highest": {
+       "when": "Thu Oct 22, 4:59 am CDT",
+       "time": "2026-10-22T04:59:36-05:00",
+       "direction": "northeast",
+       "height": "low",
+       "azimuth_deg": 25.1,
+       "elevation_deg": 18.4
+      },
+      "disappears": {
+       "when": "Thu Oct 22, 5:00 am CDT",
+       "time": "2026-10-22T05:00:52-05:00",
+       "direction": "northeast",
+       "height": "low",
+       "azimuth_deg": 40.0,
+       "elevation_deg": 10.0
+      },
+      "visible_for_s": 76
+     },
+     {
+      "visible": true,
+      "appears": {
+       "when": "Thu Oct 22, 6:33 am CDT",
+       "time": "2026-10-22T06:33:18-05:00",
+       "direction": "northwest",
+       "height": "low",
+       "azimuth_deg": 317.8,
+       "elevation_deg": 10.0
+      },
+      "highest": {
+       "when": "Thu Oct 22, 6:35 am CDT",
+       "time": "2026-10-22T06:35:28-05:00",
+       "direction": "north",
+       "height": "low",
+       "azimuth_deg": 357.5,
+       "elevation_deg": 15.7
+      },
+      "disappears": {
+       "when": "Thu Oct 22, 6:37 am CDT",
+       "time": "2026-10-22T06:37:39-05:00",
+       "direction": "northeast",
+       "height": "low",
+       "azimuth_deg": 37.3,
+       "elevation_deg": 10.0
+      },
+      "visible_for_s": 261
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Thu Oct 22, 8:13 am CDT",
+      "max_elevation_deg": 22.7
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Thu Oct 22, 9:50 am CDT",
+      "max_elevation_deg": 81.2
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Fri Oct 23, 2:33 am CDT",
+      "max_elevation_deg": 27.8
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Fri Oct 23, 4:10 am CDT",
+      "max_elevation_deg": 39.6
+     },
+     {
+      "visible": true,
+      "appears": {
+       "when": "Fri Oct 23, 5:47 am CDT",
+       "time": "2026-10-23T05:47:08-05:00",
+       "direction": "north",
+       "height": "low",
+       "azimuth_deg": 337.9,
+       "elevation_deg": 15.9
+      },
+      "highest": {
+       "when": "Fri Oct 23, 5:47 am CDT",
+       "time": "2026-10-23T05:47:47-05:00",
+       "direction": "north",
+       "height": "low",
+       "azimuth_deg": 352.4,
+       "elevation_deg": 16.7
+      },
+      "disappears": {
+       "when": "Fri Oct 23, 5:50 am CDT",
+       "time": "2026-10-23T05:50:05-05:00",
+       "direction": "northeast",
+       "height": "low",
+       "azimuth_deg": 34.8,
+       "elevation_deg": 10.0
+      },
+      "visible_for_s": 177
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Fri Oct 23, 7:25 am CDT",
+      "max_elevation_deg": 18.9
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Fri Oct 23, 9:02 am CDT",
+      "max_elevation_deg": 62.0
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Fri Oct 23, 10:39 am CDT",
+      "max_elevation_deg": 16.6
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Sat Oct 24, 1:46 am CDT",
+      "max_elevation_deg": 16.8
+     },
+     {
+      "visible": false,
+      "reason": "earth_shadow",
+      "peak": "Sat Oct 24, 3:22 am CDT",
+      "max_elevation_deg": 60.7
+     },
+     {
+      "visible": true,
+      "appears": {
+       "when": "Sat Oct 24, 5:01 am CDT",
+       "time": "2026-10-24T05:01:37-05:00",
+       "direction": "north",
+       "height": "low",
+       "azimuth_deg": 20.5,
+       "elevation_deg": 14.6
+      },
+      "highest": {
+       "when": "Sat Oct 24, 5:01 am CDT",
+       "time": "2026-10-24T05:01:37-05:00",
+       "direction": "north",
+       "height": "low",
+       "azimuth_deg": 20.5,
+       "elevation_deg": 14.6
+      },
+      "disappears": {
+       "when": "Sat Oct 24, 5:02 am CDT",
+       "time": "2026-10-24T05:02:36-05:00",
+       "direction": "northeast",
+       "height": "low",
+       "azimuth_deg": 34.8,
+       "elevation_deg": 10.0
+      },
+      "visible_for_s": 59
+     },
+     {
+      "visible": true,
+      "appears": {
+       "when": "Sat Oct 24, 6:35 am CDT",
+       "time": "2026-10-24T06:35:33-05:00",
+       "direction": "northwest",
+       "height": "low",
+       "azimuth_deg": 325.3,
+       "elevation_deg": 10.0
+      },
+      "highest": {
+       "when": "Sat Oct 24, 6:37 am CDT",
+       "time": "2026-10-24T06:37:52-05:00",
+       "direction": "north",
+       "height": "low",
+       "azimuth_deg": 7.9,
+       "elevation_deg": 16.7
+      },
+      "disappears": {
+       "when": "Sat Oct 24, 6:40 am CDT",
+       "time": "2026-10-24T06:40:10-05:00",
+       "direction": "northeast",
+       "height": "low",
+       "azimuth_deg": 50.5,
+       "elevation_deg": 10.0
+      },
+      "visible_for_s": 277
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Sat Oct 24, 8:15 am CDT",
+      "max_elevation_deg": 40.4
+     },
+     {
+      "visible": false,
+      "reason": "daylight",
+      "peak": "Sat Oct 24, 9:52 am CDT",
+      "max_elevation_deg": 27.4
+     }
+    ]
+   },
+   "is_error": false
+  }
+ ]
+}
