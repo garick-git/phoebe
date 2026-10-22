@@ -1,10 +1,11 @@
 "use client";
 
 import type { MouseEvent, Ref } from "react";
+import AskPhoebe from "./AskPhoebe";
 import { CloseIcon } from "./icons";
 
 /**
- * Ask Phoebe drawer (placeholder until the assistant exists).
+ * Ask Phoebe drawer. The question, answer and pass cards live in AskPhoebe.
  *
  * Built on the native <dialog> element opened with showModal(), which gives the
  * accessibility behavior for free: the rest of the page becomes inert (focus
@@ -26,7 +27,7 @@ export default function AskPhoebeDialog({ ref }: { ref: Ref<HTMLDialogElement> }
       onClick={closeOnBackdrop}
       className="m-0 mt-auto h-[85dvh] max-h-none w-full max-w-none rounded-t-2xl border-t border-line bg-surface p-0 text-ink sm:my-0 sm:ml-auto sm:mr-0 sm:h-dvh sm:w-[28rem] sm:rounded-none sm:border-l sm:border-t-0"
     >
-      <div className="flex h-full flex-col">
+      <div className="flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 id="ask-phoebe-title" className="text-lg font-semibold">
             Ask Phoebe
@@ -43,20 +44,7 @@ export default function AskPhoebeDialog({ ref }: { ref: Ref<HTMLDialogElement> }
           </form>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-6 text-sm leading-relaxed text-muted">
-          <p>Ask questions about satellites in plain English, for example:</p>
-          <ul className="space-y-2">
-            <li className="rounded-lg bg-raised px-4 py-3 text-ink">
-              “When can I see the ISS from Austin this week?”
-            </li>
-            <li className="rounded-lg bg-raised px-4 py-3 text-ink">
-              “Will it be clear enough to see anything tonight?”
-            </li>
-          </ul>
-          <p className="rounded-lg border border-dashed border-line p-4">
-            The assistant isn’t available yet. This panel is a placeholder.
-          </p>
-        </div>
+        <AskPhoebe />
       </div>
     </dialog>
   );

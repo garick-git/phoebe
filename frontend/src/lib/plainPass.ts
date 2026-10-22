@@ -14,6 +14,8 @@
  * - Low or brief passes are tagged, never hidden.
  * - Cards are sorted by time across satellites.
  * Built on visibility.start / highest / end, not rise / peak / set.
+ * Every card function takes the API's Pass (Tonight) or a VisiblePass (Ask
+ * Phoebe's tool results, mapped in lib/ask.ts), so both show identical cards.
  * The cloud rating's logic lives in lib/viewing.ts; this file only words it.
  */
 
@@ -91,15 +93,40 @@ export function joinWords(parts: readonly string[], last = "and"): string {
   return `${parts.slice(0, -1).join(", ")} ${last} ${parts[parts.length - 1]}`;
 }
 
-type VisiblePart = { start: PassPoint; highest: PassPoint; end: PassPoint };
+/**
+ * The visible part of one pass: everything a card needs. `appearsMidSky` /
+ * `fadesMidSky` say whether it starts (or stops) being visible above the 10°
+ * line, instead of rising (or setting) there. Tonight works them out from
+ * the API's rise and set times (below); Ask Phoebe's tool result has no rise
+ * or set, so lib/ask.ts works them out from the edges' elevations.
+ */
+export type VisiblePass = {
+  start: PassPoint;
+  highest: PassPoint;
+  end: PassPoint;
+  appearsMidSky: boolean;
+  fadesMidSky: boolean;
+};
 
-function visiblePart(pass: Pass): VisiblePart | null {
+/** A pass from the passes endpoint, or one already reduced to its visible part. */
+export type AnyPass = Pass | VisiblePass;
+
+/** The visible part, or null if the pass can't be seen. */
+export function visiblePart(pass: AnyPass): VisiblePass | null {
+  if (!("visibility" in pass)) return pass;
   const { visible, start, highest, end } = pass.visibility;
-  return visible && start && highest && end ? { start, highest, end } : null;
+  if (!(visible && start && highest && end)) return null;
+  return {
+    start,
+    highest,
+    end,
+    appearsMidSky: ms(start.time) - ms(pass.rise.time) > SAME_MOMENT_MS,
+    fadesMidSky: ms(pass.set.time) - ms(end.time) > SAME_MOMENT_MS,
+  };
 }
 
 /** Seconds the satellite can be seen (start to end of the visible part). */
-export function visibleSeconds(pass: Pass): number {
+export function visibleSeconds(pass: AnyPass): number {
   const part = visiblePart(pass);
   return part ? Math.round((ms(part.end.time) - ms(part.start.time)) / 1000) : 0;
 }
@@ -108,12 +135,10 @@ export function visibleSeconds(pass: Pass): number {
  * The path in one sentence, for example "Appears partway up in the north,
  * climbs high in the northeast and fades out low in the east."
  */
-export function pathSentence(pass: Pass): string | null {
+export function pathSentence(pass: AnyPass): string | null {
   const part = visiblePart(pass);
   if (!part) return null;
-  const { start, highest, end } = part;
-  const appears = ms(start.time) - ms(pass.rise.time) > SAME_MOMENT_MS;
-  const fades = ms(pass.set.time) - ms(end.time) > SAME_MOMENT_MS;
+  const { start, highest, end, appearsMidSky: appears, fadesMidSky: fades } = part;
 
   const clauses = [
     appears ? `Appears ${positionPhrase(start)}` : `Rises in the ${compass8(start.azimuth_deg)}`,
@@ -138,7 +163,7 @@ export function pathSentence(pass: Pass): string | null {
 }
 
 /** "Low and brief, easy to miss", or null for an easy pass. */
-export function cautionTag(pass: Pass): string | null {
+export function cautionTag(pass: AnyPass): string | null {
   const part = visiblePart(pass);
   if (!part) return null;
   const low = part.highest.elevation_deg < PARTWAY_FROM_DEG;
@@ -275,7 +300,7 @@ export type PassCardModel = {
   details: DetailRow[];
 };
 
-export type SatellitePasses = { noradId: number; nickname: string; passes: readonly Pass[] };
+export type SatellitePasses = { noradId: number; nickname: string; passes: readonly AnyPass[] };
 
 function detailRow(label: string, point: PassPoint, timeZone: string): DetailRow {
   return {
@@ -289,18 +314,16 @@ function detailRow(label: string, point: PassPoint, timeZone: string): DetailRow
 export function passCard(
   noradId: number,
   satellite: string,
-  pass: Pass,
+  pass: AnyPass,
   nowMs: number,
   timeZone: string,
   forecast: ForecastState,
 ): PassCardModel | null {
   const part = visiblePart(pass);
   if (!part) return null;
-  const { start, highest, end } = part;
+  const { start, highest, end, appearsMidSky: appears, fadesMidSky: fades } = part;
   const time = formatClock(start.time, timeZone);
   const viewing = viewingFor(forecast, start.time, end.time, nowMs);
-  const appears = ms(start.time) - ms(pass.rise.time) > SAME_MOMENT_MS;
-  const fades = ms(pass.set.time) - ms(end.time) > SAME_MOMENT_MS;
   return {
     key: `${noradId}-${start.time}`,
     noradId,
@@ -341,7 +364,7 @@ export function buildPassCards(
   const cards: PassCardModel[] = [];
   for (const sat of satellites) {
     for (const pass of sat.passes) {
-      const end = pass.visibility.end;
+      const end = visiblePart(pass)?.end;
       if (end && ms(end.time) <= nowMs) continue;
       const card = passCard(sat.noradId, sat.nickname, pass, nowMs, timeZone, forecast);
       if (card) cards.push(card);
