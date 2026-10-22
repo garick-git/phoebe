@@ -113,4 +113,8 @@ jobs:
 
       - run: pip install -r requirements.txt
       - run: ruff check .
+      # Known vulnerabilities in the pinned requirements (PyPI advisory data).
+      # pipx runs pip-audit in its own throwaway environment, so its packages
+      # are neither installed next to the app nor audited with it.
+      - run: pipx run --spec pip-audit==2.10.1 pip-audit --strict --progress-spinner off -r requirements.txt
       - run: pytest

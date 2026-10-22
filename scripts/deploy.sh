@@ -22,6 +22,7 @@ trap 'log "deploy FAILED at line $LINENO of deploy.sh"' ERR
 
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail "the image tag is not a commit SHA"
 [ -f .env ] || fail "no .env in $(pwd); run from ~/phoebe"
+[ -f db.env ] || fail "no db.env in $(pwd) (the database settings, split from .env on Oct 22)"
 
 log "deploy $SHA"
 

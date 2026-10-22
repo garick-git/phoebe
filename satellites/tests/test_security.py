@@ -46,3 +46,22 @@ def test_throttle_counts_each_forwarded_client_separately(monkeypatch, client):
     assert client.get(LIST_URL, headers=first).status_code == 200
     assert client.get(LIST_URL, headers=first).status_code == 429
     assert client.get(LIST_URL, headers=other).status_code == 200
+
+
+@pytest.mark.parametrize("path", [LIST_URL, "/admin/login/"])
+def test_csp_allows_only_phoebes_own_scripts_and_no_framing(settings, client, path):
+    # The admin page links its CSS through the static files manifest, which only
+    # exists after collectstatic (the Docker build), not in tests or CI: use
+    # plain static file URLs here. The CSP header doesn't depend on them.
+    settings.STORAGES = {
+        **settings.STORAGES,
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
+
+    csp = client.get(path).headers["Content-Security-Policy"]
+
+    directives = dict(part.strip().split(" ", 1) for part in csp.split(";"))
+    assert directives["script-src"] == "'self'"  # no inline or outside scripts
+    assert directives["object-src"] == "'none'"
+    assert directives["base-uri"] == "'none'"
+    assert directives["frame-ancestors"] == "'none'"

@@ -14,6 +14,8 @@ import os
 from decimal import Decimal
 from pathlib import Path
 
+from django.utils.csp import CSP
+
 from config.cors import parse_allowed_origins
 from config.observability import init_sentry
 
@@ -48,6 +50,24 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # production starts short (3600) and is raised once everything is verified.
 # Not set: includeSubDomains and preload (this is one hostname, not the apex).
 SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", "0"))
+
+# Content-Security-Policy (Django's built-in CSP, no package). The API's JSON
+# never runs in a browser; the policy is for the HTML pages Django renders
+# (the admin and DRF's browsable API): only Phoebe's own scripts and images,
+# no inline scripts, no plugins, no <base> rewrites, no framing. Inline
+# *styles* are allowed because DRF's browsable API templates use them (styles
+# can't run code); the admin needs nothing inline. Checked in a browser
+# against both (0 violations, Oct 22).
+SECURE_CSP = {
+    "default-src": [CSP.SELF],
+    "script-src": [CSP.SELF],
+    "style-src": [CSP.SELF, CSP.UNSAFE_INLINE],
+    "img-src": [CSP.SELF, "data:"],
+    "object-src": [CSP.NONE],
+    "base-uri": [CSP.NONE],
+    "form-action": [CSP.SELF],
+    "frame-ancestors": [CSP.NONE],
+}
 
 # Cookies marked Secure are never sent over plain HTTP. Off in local development,
 # where the admin is reached over http://localhost.
@@ -85,6 +105,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "config.cors.ApiCorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

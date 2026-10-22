@@ -1,0 +1,70 @@
+# Dependabot: weekly pull requests that update pinned dependencies (brief 6b).
+# Every PR runs CI like any other and needs a human to merge it; a merge that
+# touches the back end deploys it, so read the changelog of anything that isn't
+# a patch release first. Security fixes also arrive outside this schedule
+# (Dependabot security updates, switched on in the repo's settings).
+#
+# cooldown: wait a few days after a release before proposing it, so a
+# compromised or broken version has time to be caught and pulled first.
+version: 2
+updates:
+  # Back end: requirements.txt (exact pins).
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      python-patches:
+        update-types: [patch]
+
+  # Front end: package.json / package-lock.json (exact pins).
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      npm-patches:
+        update-types: [patch]
+
+  # GitHub Actions in .github/workflows/, pinned by commit SHA: Dependabot
+  # updates the SHA and the version comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+
+  # Base images: the Dockerfile (python:3.13-slim) and the compose files
+  # (postgres:18, caddy:2.11.7). A new Python minor version (3.14) or Postgres
+  # major version (19) is a planned upgrade, never a weekly PR: a new Postgres
+  # major can't start on the old data volume without a dump and restore.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: python
+        update-types: [version-update:semver-major, version-update:semver-minor]
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]
