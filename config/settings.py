@@ -15,6 +15,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from config.cors import parse_allowed_origins
+from config.observability import init_sentry
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -234,3 +235,12 @@ ASK_PHOEBE_MODEL = os.environ.get("ASK_PHOEBE_MODEL", "claude-sonnet-5-5")
 # exactly in Postgres. With the Console's $5/month workspace limit as the
 # hard stop. Decision log 2026-10-21.
 ASK_PHOEBE_DAILY_BUDGET_USD = Decimal(os.environ.get("ASK_PHOEBE_DAILY_BUDGET_USD", "0.15"))
+
+
+# Error tracking: Sentry (config/observability.py). Off unless SENTRY_DSN is
+# set, which only the server's .env does, so development, tests and CI send
+# nothing. Coordinates, questions, place names and IPs are scrubbed first.
+init_sentry(
+    os.environ.get("SENTRY_DSN", ""),
+    environment=os.environ.get("SENTRY_ENVIRONMENT", "production"),
+)
