@@ -106,7 +106,28 @@ Root's crontab on the host (times are UTC):
 - **`run_ingest.sh`** runs `ingest_satellites` inside the running `web` container, which downloads CelesTrak's active-satellites feed and upserts it. It logs to `/var/log/phoebe/ingest.log`.
 - **`run_backup.sh`** dumps the database and uploads the dump to S3 (see Backups below). It logs to `/var/log/phoebe/backup.log`.
 
-The scripts come from the deployed image: `deploy.sh` copies them into `~/phoebe/scripts/`, so a script change ships with the next deploy. Both scripts run on the host, not in a container: the backup needs the instance role's credentials, which containers can't reach. Both set their own `PATH` (cron's is minimal and lacks `/snap/bin`, where the AWS CLI lives), use `docker compose exec -T` (cron has no terminal), write `ok` or `FAILED` lines with UTC timestamps, and exit non-zero on failure.
+The scripts come from the deployed image: `deploy.sh` copies them into `~/phoebe/scripts/`, so a script change ships with the next deploy. Both scripts run on the host, not in a container: the backup needs the instance role's credentials, which containers can't reach. Both set their own `PATH` (cron's is minimal and lacks `/snap/bin`, where the AWS CLI lives), use `docker compose exec -T` (cron has no terminal), write `ok` or `FAILED` lines with UTC timestamps, and exit non-zero on failure. Each run also publishes `IngestSucceeded` or `BackupSucceeded` (1 or 0) to CloudWatch for the alarms below (`scripts/report_metric.sh`); a failed publish is logged as `metric … NOT sent` and doesn't change the job's result.
+
+### Alarms
+
+Every alarm emails through the SNS topic `phoebe-alerts` (us-east-2; the subscription is confirmed by email). Application errors (including Ask Phoebe's `config` failure, an expired or revoked Claude key) go to Sentry instead, which emails on every new issue.
+
+| Alarm | Fires when | Why |
+|---|---|---|
+| `phoebe-ingest-failed` | `Phoebe/IngestSucceeded` minimum < 1 in an hour (missing data = OK) | A run failed (CelesTrak down or refusing, the container stopped) |
+| `phoebe-ingest-stale` | no `IngestSucceeded` of 1 for 26 hours (missing data = breaching) | The job didn't run at all (cron, the server, or the metric call broken) |
+| `phoebe-backup-failed` | `Phoebe/BackupSucceeded` minimum < 1 in an hour | A backup failed |
+| `phoebe-backup-stale` | no `BackupSucceeded` of 1 for 26 hours | No backup in over a day |
+| `phoebe-server-system-check` | EC2 `StatusCheckFailed_System` for 2 minutes | AWS's hardware or network under the server failed; the alarm also **recovers** the instance onto healthy hardware |
+| `phoebe-server-instance-check` | EC2 `StatusCheckFailed_Instance` for 3 minutes | The server itself is unreachable (kernel, memory, network config); the alarm also **reboots** it |
+
+The server's role may only publish into the `Phoebe` namespace (inline policy `phoebe-put-metrics`; `PutMetricData` can't be limited to a resource, so the namespace condition does it). Cost: $0 within CloudWatch's always-free tier (10 custom metrics, 10 alarms); about $1.20 a month without it. **Test an alarm** without waiting for a failure (from `~/phoebe` on the server; publishes a real 0):
+
+```
+aws cloudwatch put-metric-data --region us-east-2 --namespace Phoebe --metric-name BackupSucceeded --value 0
+```
+
+`phoebe-backup-failed` emails within a few minutes and returns to OK (with a second email) about an hour later, once that hour's 0 has aged out.
 
 **Check last night's runs:**
 

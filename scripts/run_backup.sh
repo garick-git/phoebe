@@ -6,7 +6,8 @@
 # uploaded by mistake would stay in the bucket until the 30-day lifecycle rule removes it.
 #
 # The bucket name is read from /etc/phoebe/backup.env (root-only, on the server),
-# so it never appears in the repository.
+# so it never appears in the repository. Success (1) or failure (0) is reported to
+# CloudWatch for the alarms (report_metric.sh).
 set -uo pipefail
 
 # Cron's PATH is tiny. The snap-installed AWS CLI lives in /snap/bin.
@@ -20,9 +21,11 @@ LOG_DIR=/var/log/phoebe
 LOG_FILE="$LOG_DIR/backup.log"
 mkdir -p "$LOG_DIR"
 
+. scripts/report_metric.sh
+
 stamp() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
 log()   { echo "$(stamp) $*" >> "$LOG_FILE"; }
-fail()  { log "backup FAILED: $*"; exit 1; }
+fail()  { log "backup FAILED: $*"; report_metric BackupSucceeded 0; exit 1; }
 
 [ -r /etc/phoebe/backup.env ] || fail "cannot read /etc/phoebe/backup.env"
 . /etc/phoebe/backup.env
@@ -57,3 +60,4 @@ aws s3 cp "$FILE" "s3://$BACKUP_BUCKET/$KEY" --sse AES256 --only-show-errors \
   >> "$LOG_FILE" 2>&1 || fail "upload to S3 failed (exit $?)"
 
 log "backup ok: $KEY, $SIZE bytes"
+report_metric BackupSucceeded 1
