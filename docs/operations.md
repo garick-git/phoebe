@@ -29,7 +29,7 @@ Idle sessions time out. The containers and cron jobs keep running.
 
 | File | Holds | Notes |
 |---|---|---|
-| `~/phoebe/.env` | Django and Postgres settings: `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_HSTS_SECONDS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `DJANGO_ADMIN_PATH`, `DJANGO_CORS_ALLOWED_ORIGINS`, `POSTGRES_*`, `ANTHROPIC_API_KEY` (Ask Phoebe; optionally `ASK_PHOEBE_MODEL` and `ASK_PHOEBE_DAILY_BUDGET_USD`) | Mode 600. Secrets were generated on the server with `openssl rand`. Read single lines with `grep '^NAME=' .env`; never print the whole file. |
+| `~/phoebe/.env` | Django and Postgres settings: `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_HSTS_SECONDS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `DJANGO_ADMIN_PATH`, `DJANGO_CORS_ALLOWED_ORIGINS`, `POSTGRES_*`, `ANTHROPIC_API_KEY` (Ask Phoebe; optionally `ASK_PHOEBE_MODEL` and `ASK_PHOEBE_DAILY_BUDGET_USD`), `SENTRY_DSN` (error tracking; unset = off) | Mode 600. Secrets were generated on the server with `openssl rand`. Read single lines with `grep '^NAME=' .env`; never print the whole file. |
 | `/etc/phoebe/backup.env` | `BACKUP_BUCKET` | Root-owned, mode 600. Keeps the bucket name (which contains the account ID) out of the repo. |
 | Root's crontab | The two daily jobs below | View with `sudo crontab -l`. |
 

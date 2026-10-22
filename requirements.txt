@@ -19,8 +19,10 @@ Pygments==2.21.0
 pytest==9.1.1
 pytest-django==4.14.0
 ruff==0.17.1
+sentry-sdk==2.73.0
 sgp4==2.27
 skyfield==1.55
 sqlparse==0.6.0
 typing_extensions==4.16.0
+urllib3==2.8.0
 whitenoise==6.12.0
