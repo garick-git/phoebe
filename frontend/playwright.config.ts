@@ -23,10 +23,11 @@ export default defineConfig({
     trace: "retain-on-failure",
     ...devices["Desktop Chrome"],
   },
-  // Python's built-in static server: no extra package. /tonight/ serves
+  // Python's built-in static server (no extra package), with a bigger
+  // connection queue and keep-alive (e2e/serve.py says why). /tonight/ serves
   // out/tonight/index.html, as on Amplify (trailingSlash: true).
   webServer: {
-    command: `python3 -m http.server ${PORT} --bind 127.0.0.1 --directory out`,
+    command: `python3 e2e/serve.py ${PORT} out`,
     url: `http://127.0.0.1:${PORT}/`,
     reuseExistingServer: !process.env.CI,
     // http.server logs every request to stderr; a server that fails to start
