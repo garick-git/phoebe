@@ -9,7 +9,7 @@
  * (or expose) must not make a test pass.
  */
 
-import type { Page, Route } from "@playwright/test";
+import { expect, type Locator, type Page, type Route } from "@playwright/test";
 
 export const APP_ORIGIN = "http://127.0.0.1:4173";
 
@@ -71,4 +71,40 @@ export async function stubCloudForecast(page: Page, percent: number | "fail"): P
       headers: { "Access-Control-Allow-Origin": "*" },
     });
   });
+}
+
+/**
+ * Open a dialog, retrying until it opens. The page's HTML (with its buttons)
+ * arrives before React has hydrated it, and a click in that moment does
+ * nothing. Playwright's own pattern for this is to retry the action inside
+ * toPass(), never to add a fixed wait. (The flaky drawer tests of Oct 22 were
+ * mostly the test server dropping script requests; see e2e/serve.py.)
+ */
+export async function openDialog(dialog: Locator, open: () => Promise<void>): Promise<void> {
+  await expect(async () => {
+    if (!(await dialog.isVisible())) await open();
+    await expect(dialog).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
+}
+
+/** One event as the browser sent it to PostHog. */
+export type SentEvent = { event: string; properties: Record<string, unknown> };
+
+/**
+ * Answer PostHog's capture endpoint (with CORS, like the real one) and keep
+ * every event body, so a test can check exactly what left the browser.
+ * Only does anything in a build made with NEXT_PUBLIC_POSTHOG_KEY set.
+ */
+export async function recordAnalytics(page: Page): Promise<SentEvent[]> {
+  const sent: SentEvent[] = [];
+  await page.route("https://us.i.posthog.com/**", async (route) => {
+    const headers = {
+      "Access-Control-Allow-Origin": APP_ORIGIN,
+      "Access-Control-Allow-Methods": "POST",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
+    if (route.request().method() === "POST") sent.push(route.request().postDataJSON());
+    await route.fulfill({ status: 200, json: { status: "Ok" }, headers });
+  });
+  return sent;
 }

@@ -29,6 +29,12 @@ jobs:
     name: frontend
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # Dummy (not real) keys, so the build includes Sentry and PostHog like
+    # production and e2e/privacy.spec.ts can check what they would send.
+    # The e2e tests block or stub every outside request, so nothing is sent.
+    env:
+      NEXT_PUBLIC_POSTHOG_KEY: phc_ci_dummy
+      NEXT_PUBLIC_SENTRY_DSN: https://ci@o0.ingest.us.sentry.io/0
     defaults:
       run:
         working-directory: frontend
