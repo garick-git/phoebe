@@ -26,6 +26,13 @@ type ForecastLoaded = { key: string; state: ForecastState };
 // One shared object, so the cards' useMemo doesn't rerun while still loading.
 const FORECAST_LOADING: ForecastState = { status: "loading" };
 
+/** The same failure for every satellite gets one line instead of three. */
+function allFailedText(httpStatus: number | null): string {
+  if (httpStatus === 429) return "Too many requests right now. Wait a minute, then try again.";
+  if (httpStatus === null) return "Couldn't reach Phoebe's server. Check your connection, then try again.";
+  return "Couldn't load passes. Try again in a moment.";
+}
+
 function errorText(httpStatus: number | null): string {
   if (httpStatus === 429) return "too many requests right now. Wait a minute, then try again.";
   if (httpStatus === null) return "couldn't reach Phoebe's server.";
@@ -157,9 +164,22 @@ export default function PassSummary({ place }: { place: Place }) {
 
   const { tonight, later } = cards;
   const checked = joinWords(okSats.map((sat) => sat.inSentence), "or");
-  const statusText = tonight.length
-    ? `${tonight.length} visible ${tonight.length === 1 ? "pass" : "passes"} tonight. ${nextText(tonight[0])}`
-    : `No visible passes tonight. ${later.length ? nextText(later[0]) : ""}`;
+  const statusOf = (sat: (typeof POPULAR_SATELLITES)[number]) => {
+    const row = rows[sat.noradId];
+    return row?.status === "error" ? row.httpStatus : null;
+  };
+  // Every satellite failed for the same reason: say it once.
+  const sameFailure =
+    okSats.length === 0 && new Set(failedSats.map(statusOf)).size === 1
+      ? allFailedText(statusOf(failedSats[0]))
+      : null;
+  // Never "No visible passes" when nothing loaded: we don't know.
+  const statusText =
+    okSats.length === 0
+      ? (sameFailure ?? "Couldn't load passes.")
+      : tonight.length
+        ? `${tonight.length} visible ${tonight.length === 1 ? "pass" : "passes"} tonight. ${nextText(tonight[0])}`
+        : `No visible passes tonight. ${later.length ? nextText(later[0]) : ""}`;
 
   return (
     <div className="mt-3">
@@ -167,16 +187,17 @@ export default function PassSummary({ place }: { place: Place }) {
 
       {failedSats.length > 0 && (
         <div className="mt-3 rounded-lg border border-line bg-surface p-4 text-sm text-ink">
-          <ul className="space-y-1">
-            {failedSats.map((sat) => {
-              const row = rows[sat.noradId];
-              return (
+          {sameFailure ? (
+            <p>{sameFailure}</p>
+          ) : (
+            <ul className="space-y-1">
+              {failedSats.map((sat) => (
                 <li key={sat.noradId}>
-                  {sat.nickname}: {errorText(row?.status === "error" ? row.httpStatus : null)}
+                  {sat.nickname}: {errorText(statusOf(sat))}
                 </li>
-              );
-            })}
-          </ul>
+              ))}
+            </ul>
+          )}
           <button
             type="button"
             onClick={() => setAttempt((n) => n + 1)}
@@ -195,12 +216,21 @@ export default function PassSummary({ place }: { place: Place }) {
           {tonight.length > 0 ? (
             <CardList cards={tonight} />
           ) : (
-            <p className="mt-3 rounded-xl border border-line bg-surface p-4 text-base text-ink">
-              No visible passes from {checked} tonight.{" "}
-              {later.length > 0
-                ? nextText(later[0])
-                : `None in the next ${PASS_DAYS} days either.`}
-            </p>
+            <div className="mt-3 rounded-xl border border-line bg-surface p-4">
+              <p className="text-base text-ink">
+                No visible passes from {checked} tonight.{" "}
+                {later.length > 0
+                  ? nextText(later[0])
+                  : `None in the next ${PASS_DAYS} days either.`}
+              </p>
+              {later.length === 0 && (
+                // So an empty week doesn't look like a broken page (Nov 2 copy pass).
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  Satellites only show up when your sky is dark but they&apos;re still in sunlight, so
+                  visible passes come and go in stretches. Check back in a few days.
+                </p>
+              )}
+            </div>
           )}
 
           {later.length > 0 && (

@@ -39,7 +39,8 @@ export default function SatelliteDetails({ name, noradId, categoryLabel, positio
 
   return (
     <div>
-      <h3 className="mt-2 text-lg font-semibold text-ink">{name}</h3>
+      {/* Below lg the sheet's bar already shows the name. */}
+      <h3 className="mt-2 text-lg font-semibold text-ink max-lg:hidden">{name}</h3>
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
         {rows.map(([label, value]) => (
           <div key={label}>

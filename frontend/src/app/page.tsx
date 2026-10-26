@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import DetailSheet from "@/components/DetailSheet";
 import GlobeLoader from "@/components/GlobeLoader";
 import {
   GLOBE_DETAIL_SLOT_ID,
@@ -18,7 +19,11 @@ export const metadata: Metadata = pageMetadata({
 
 const DETAIL_FIELDS = ["NORAD ID", "Category", "Altitude", "Speed", "Orbit period", "Inclination"];
 
-/** Globe (home). The heading and panel are pre-rendered HTML; the 3D globe loads after them. */
+/**
+ * Globe (home). The heading and panel are pre-rendered HTML; the 3D globe loads after them.
+ * Phones and tablets: the globe fills the page and the details are a bottom sheet over it
+ * (DetailSheet.tsx); desktop: a side panel.
+ */
 export default function GlobePage() {
   return (
     <div className="flex flex-1 flex-col lg:flex-row">
@@ -42,19 +47,10 @@ export default function GlobePage() {
         </div>
       </section>
 
-      <aside
-        aria-labelledby="detail-heading"
-        className="border-t border-line bg-surface p-5 lg:w-80 lg:border-l lg:border-t-0"
-      >
-        <h2
-          id="detail-heading"
-          className="text-sm font-semibold uppercase tracking-wider text-muted"
-        >
-          Satellite details
-        </h2>
+      <DetailSheet>
         <div data-detail-placeholder>
           <p className="mt-2 text-sm text-muted">
-            Click a satellite on the globe, or search for one, to see its details and path.
+            Tap or click a satellite on the globe, or search for one, to see its details and path.
           </p>
           <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             {DETAIL_FIELDS.map((field) => (
@@ -67,7 +63,7 @@ export default function GlobePage() {
         </div>
         {/* The globe renders the selected satellite here (see globals.css). */}
         <div id={GLOBE_DETAIL_SLOT_ID} data-detail-slot />
-      </aside>
+      </DetailSheet>
     </div>
   );
 }

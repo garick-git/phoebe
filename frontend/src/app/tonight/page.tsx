@@ -31,7 +31,8 @@ function TonightSkeleton() {
 export default function TonightPage() {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Tonight</h1>
+      {/* Not "Tonight": the nav tab and the first section heading already say it (Nov 2 copy pass). */}
+      <h1 className="text-2xl font-semibold tracking-tight">When to look up</h1>
       <p className="mt-2 text-muted">
         Pick a city to see when the ISS, Tiangong and Hubble pass over and whether you can see
         them.

@@ -18,7 +18,7 @@ import {
   type SatellitePosition,
 } from "@/lib/orbits";
 import { buildSearchIndex, type SearchIndex, type SearchResult } from "@/lib/search";
-import { GLOBE_DETAIL_SLOT_ID, GLOBE_SEARCH_SLOT_ID } from "@/lib/site";
+import { GLOBE_DETAIL_SLOT_ID, GLOBE_PEEK_SLOT_ID, GLOBE_SEARCH_SLOT_ID } from "@/lib/site";
 import type { FromWorker, ToWorker } from "@/workers/positions-messages";
 
 type LoadState =
@@ -179,6 +179,8 @@ export default function SatelliteGlobe() {
 
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [state, setState] = useState<LoadState>({ kind: "loading" });
+  // Bumped by Try again: restarts the worker and its download.
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [searchIndex, setSearchIndex] = useState<SearchIndex | null>(null);
   const [selected, setSelected] = useState<SearchResult | null>(null);
   // Category filter: an index into CATEGORIES, or ALL. The ref lets the worker's
@@ -194,6 +196,7 @@ export default function SatelliteGlobe() {
   // client-only component first renders.
   const [searchSlot] = useState(() => document.getElementById(GLOBE_SEARCH_SLOT_ID));
   const [detailSlot] = useState(() => document.getElementById(GLOBE_DETAIL_SLOT_ID));
+  const [peekSlot] = useState(() => document.getElementById(GLOBE_PEEK_SLOT_ID));
   // WCAG 2.2.2 (Pause, Stop, Hide): moving content needs a pause control.
   // People who ask their system for reduced motion start paused.
   const [playing, setPlaying] = useState(() => !prefersReducedMotion());
@@ -311,7 +314,7 @@ export default function SatelliteGlobe() {
       worker.terminate();
       workerRef.current = null;
     };
-  }, [requestPositions, publish]);
+  }, [requestPositions, publish, loadAttempt]);
 
   // Stop updating while the tab is hidden: nobody can see it, and it saves battery.
   useEffect(() => {
@@ -504,7 +507,21 @@ export default function SatelliteGlobe() {
           detailSlot,
         )}
 
-      <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-2 px-4">
+      {/* The sheet's collapsed bar on phones: the name alone, so a tap on a dot
+          is visible at once. The hidden word gives the bar's button the name
+          "ISS (ZARYA) details" for screen readers. */}
+      {peekSlot &&
+        selected &&
+        createPortal(
+          <>
+            {selected.name}
+            <span className="sr-only"> details</span>
+          </>,
+          peekSlot,
+        )}
+
+      {/* Below lg, sit above the details sheet's collapsed bar (3.5rem plus its border). */}
+      <div className="absolute inset-x-0 bottom-[4.75rem] flex items-center justify-center gap-2 px-4 lg:bottom-4">
         {/* A live region: its text changes only when the state does (never
             every second), so screen readers aren't flooded. */}
         <p
@@ -512,13 +529,26 @@ export default function SatelliteGlobe() {
           className="whitespace-nowrap rounded-full border border-line bg-bg/80 px-4 py-1.5 text-xs text-muted"
         >
           {state.kind === "loading" && "Loading satellites…"}
-          {state.kind === "error" && "Couldn't load satellites. Please try again later."}
+          {state.kind === "error" && "Couldn't load the satellites."}
           {state.kind === "ready" &&
             (categoryLabel
               ? `${count.toLocaleString()} of ${total.toLocaleString()} satellites · ${categoryLabel}`
               : `${count.toLocaleString()} satellites`) +
               ` · ${playing ? "live" : `paused at ${state.at.toLocaleTimeString([], timeFormat)}`}`}
         </p>
+
+        {state.kind === "error" && (
+          <button
+            type="button"
+            onClick={() => {
+              setState({ kind: "loading" });
+              setLoadAttempt((n) => n + 1);
+            }}
+            className="inline-flex min-h-11 items-center rounded-full border border-line bg-raised px-4 text-xs font-medium text-ink hover:border-accent"
+          >
+            Try again
+          </button>
+        )}
 
         {state.kind === "ready" && (
           <button
