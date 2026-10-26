@@ -35,13 +35,14 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/about/", label: "About" },
 ];
 
-// Link preview image (public/og-image.png). Set explicitly on every page: with
+// Link preview image (public/og-image.png: a real screenshot of the globe, taken
+// Oct 26, 1200×630). Set explicitly on every page: with
 // shallow merging, a page that sets its own openGraph would otherwise lose it.
 const OG_IMAGE = {
   url: "/og-image.png",
   width: 1200,
   height: 630,
-  alt: "Phoebe: a dark night sky with a planet, an amber orbit line and a bright satellite, next to the text “When to look up, and whether you’ll actually see it.”",
+  alt: "Phoebe’s live globe: about 16,800 satellites as amber dots around a dark Earth, with the ISS highlighted, its next orbit drawn, and its details (altitude 423 km, speed 7.66 km/s) in a side panel.",
 };
 
 const openGraphBase = {
