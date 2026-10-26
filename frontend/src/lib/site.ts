@@ -21,6 +21,11 @@ export const GLOBE_SEARCH_SLOT_ID = "globe-search";
 // CSS once the slot has content; see globals.css).
 export const GLOBE_DETAIL_SLOT_ID = "globe-details";
 
+// Where the live globe puts the selected satellite's name: the collapsed bar of
+// the details sheet on phones (DetailSheet.tsx), so a tap on a dot is visible
+// without opening the sheet.
+export const GLOBE_PEEK_SLOT_ID = "globe-peek";
+
 export type NavItem = { href: string; label: string };
 
 // trailingSlash is on (next.config.ts), so internal links end in "/".

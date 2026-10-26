@@ -94,3 +94,11 @@ export function CheckIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function ChevronUpIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M6 15l6-6 6 6" />
+    </svg>
+  );
+}
