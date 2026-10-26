@@ -56,7 +56,13 @@ Deploys are automatic. Merging a pull request into `main` runs `.github/workflow
    - restarts Caddy only if the `Caddyfile` changed, and removes images nothing uses.
 6. The workflow prints the server's output and checks the API from outside.
 
-`web` is down for a few seconds while the new container starts (one container, no blue/green switch).
+`web` is down for about 10 seconds while the new container starts (one container, no blue/green switch); Caddy keeps answering, with `502`. Measured on Oct 26 with a 1-second `curl` loop from outside: 8 failed probes in a row. To measure again during a deploy:
+
+```
+while true; do printf '%s %s\n' "$(date +%T)" "$(curl -s -o /dev/null -m 2 -w '%{http_code}' https://phoebe-api.garickm.com/api/satellites/25544/)"; sleep 1; done | tee ~/deploy-downtime.log
+```
+
+Then `grep -v ' 200$' ~/deploy-downtime.log` lists the failures (a `429` is the rate limit, not downtime).
 
 **Watch a deploy:** GitHub → Actions → Deploy. The step "Deploy on the server" shows the server's output, ending in `deploy ok: <sha>`. The logs are public: the account ID and the instance ID are Actions secrets (`AWS_ACCOUNT_ID`, `PHOEBE_INSTANCE_ID`), so they show as `***`, and nothing prints the registry address.
 

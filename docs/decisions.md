@@ -100,7 +100,7 @@ Back to the [README](../README.md).
 ### Migrate before switching
 **Oct 15 and Oct 21.** `deploy.sh` runs migrations in a throwaway container from the new image while the old container keeps serving. Only after that succeeds does it install the new server files and switch. The previous image is kept for a one-command rollback.
 - **Why:** a failed migration leaves the server exactly as it was. Because old code runs against the new schema for a moment, migrations must be additive.
-- **Accepted:** one `web` container is recreated on each deploy, which means a few seconds of errors. Blue/green deploys are parked until traffic justifies them.
+- **Accepted:** one `web` container is recreated on each deploy, which means about 10 seconds of errors (measured on Oct 26 with a 1-second probe: the proxy answers 502 while the new container starts). Blue/green deploys are parked until traffic justifies them.
 
 ### Every merge gated by CI
 **Oct 20.** One workflow with two parallel jobs (front end and back end, about 46 s), actions pinned by commit SHA, a least-privilege token, and a ruleset that requires both checks and a pull request, with no force pushes and no bypass. Dependency audits (`npm audit`, `pip-audit`) fail the build on a known vulnerability.
