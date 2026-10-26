@@ -75,9 +75,10 @@ function GroupCards({ group, at, forecast }: { group: PassGroup; at: number; for
   const span = group.days === 1 ? "next day" : `next ${group.days} days`;
   return (
     <section aria-labelledby={`ask-group-${group.key}`} className="mt-6">
-      <h4 id={`ask-group-${group.key}`} className="text-base font-semibold text-ink">
+      {/* h3 under the dialog's h2; each card's headline is an h4 (PassCard). */}
+      <h3 id={`ask-group-${group.key}`} className="text-base font-semibold text-ink">
         {group.satellite} from {group.place.label}
-      </h4>
+      </h3>
       <p className="mt-1 text-sm text-muted">
         Visible passes in the {span}. Times are {zoneName(group.place.timezone, at)}.
       </p>
@@ -318,11 +319,11 @@ export default function AskPhoebe() {
             {loading ? "Asking…" : "Ask"}
           </button>
         </div>
-        {inputError && (
-          <p id="ask-question-error" className="mt-2 text-sm text-ink">
-            {inputError}
-          </p>
-        )}
+        {/* Always rendered, so screen readers announce the error when it appears
+            (VoiceOver stayed silent when the element was inserted with its text). */}
+        <p id="ask-question-error" role="alert" className={inputError ? "mt-2 text-sm text-ink" : undefined}>
+          {inputError}
+        </p>
         <p id="ask-question-note" className="mt-2 text-xs text-muted">
           Answered by Claude (Anthropic) from Phoebe’s data. Don’t include personal details.
         </p>

@@ -147,17 +147,17 @@ export default function PassSummary({ place }: { place: Place }) {
   if (!cards || !current) {
     return (
       <div className="mt-3" aria-busy="true">
-        <p className="text-sm text-muted">
-          Checking {joinWords(POPULAR_SATELLITES.map((sat) => sat.inSentence))}…
-        </p>
-        <div aria-hidden="true" className="mt-3 space-y-3">
-          {[0, 1].map((i) => (
-            <div key={i} className="h-36 rounded-xl border border-line bg-surface motion-safe:animate-pulse" />
-          ))}
+        <div>
+          <p className="text-sm text-muted">
+            Checking {joinWords(POPULAR_SATELLITES.map((sat) => sat.inSentence))}…
+          </p>
+          <div aria-hidden="true" className="mt-3 space-y-3">
+            {[0, 1].map((i) => (
+              <div key={i} className="h-36 rounded-xl border border-line bg-surface motion-safe:animate-pulse" />
+            ))}
+          </div>
         </div>
-        <p role="status" className="sr-only">
-          Loading passes…
-        </p>
+        <StatusLine text="Loading passes…" />
       </div>
     );
   }
@@ -183,68 +183,81 @@ export default function PassSummary({ place }: { place: Place }) {
 
   return (
     <div className="mt-3">
-      <p className="text-sm text-muted">Times are {zoneName(place.timeZone, nowMs)}.</p>
+      <div>
+        <p className="text-sm text-muted">Times are {zoneName(place.timeZone, nowMs)}.</p>
 
-      {failedSats.length > 0 && (
-        <div className="mt-3 rounded-lg border border-line bg-surface p-4 text-sm text-ink">
-          {sameFailure ? (
-            <p>{sameFailure}</p>
-          ) : (
-            <ul className="space-y-1">
-              {failedSats.map((sat) => (
-                <li key={sat.noradId}>
-                  {sat.nickname}: {errorText(statusOf(sat))}
-                </li>
-              ))}
-            </ul>
-          )}
-          <button
-            type="button"
-            onClick={() => setAttempt((n) => n + 1)}
-            className="mt-3 min-h-11 rounded-full border border-line px-4 text-ink hover:bg-raised"
-          >
-            Try again
-          </button>
-        </div>
-      )}
+        {failedSats.length > 0 && (
+          <div className="mt-3 rounded-lg border border-line bg-surface p-4 text-sm text-ink">
+            {sameFailure ? (
+              <p>{sameFailure}</p>
+            ) : (
+              <ul className="space-y-1">
+                {failedSats.map((sat) => (
+                  <li key={sat.noradId}>
+                    {sat.nickname}: {errorText(statusOf(sat))}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              onClick={() => setAttempt((n) => n + 1)}
+              className="mt-3 min-h-11 rounded-full border border-line px-4 text-ink hover:bg-raised"
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
-      {okSats.length > 0 && (
-        <>
-          <h3 className="mt-6 text-base font-semibold">
-            Tonight <span className="font-normal text-muted">(until noon tomorrow)</span>
-          </h3>
-          {tonight.length > 0 ? (
-            <CardList cards={tonight} />
-          ) : (
-            <div className="mt-3 rounded-xl border border-line bg-surface p-4">
-              <p className="text-base text-ink">
-                No visible passes from {checked} tonight.{" "}
-                {later.length > 0
-                  ? nextText(later[0])
-                  : `None in the next ${PASS_DAYS} days either.`}
-              </p>
-              {later.length === 0 && (
-                // So an empty week doesn't look like a broken page (Nov 2 copy pass).
-                <p className="mt-2 text-sm leading-relaxed text-muted">
-                  Satellites only show up when your sky is dark but they&apos;re still in sunlight, so
-                  visible passes come and go in stretches. Check back in a few days.
+        {okSats.length > 0 && (
+          <>
+            <h3 className="mt-6 text-base font-semibold">
+              Tonight <span className="font-normal text-muted">(until noon tomorrow)</span>
+            </h3>
+            {tonight.length > 0 ? (
+              <CardList cards={tonight} />
+            ) : (
+              <div className="mt-3 rounded-xl border border-line bg-surface p-4">
+                <p className="text-base text-ink">
+                  No visible passes from {checked} tonight.{" "}
+                  {later.length > 0
+                    ? nextText(later[0])
+                    : `None in the next ${PASS_DAYS} days either.`}
                 </p>
-              )}
-            </div>
-          )}
+                {later.length === 0 && (
+                  // So an empty week doesn't look like a broken page (Nov 2 copy pass).
+                  <p className="mt-2 text-sm leading-relaxed text-muted">
+                    Satellites only show up when your sky is dark but they&apos;re still in sunlight, so
+                    visible passes come and go in stretches. Check back in a few days.
+                  </p>
+                )}
+              </div>
+            )}
 
-          {later.length > 0 && (
-            <>
-              <h3 className="mt-8 text-base font-semibold">Later this week</h3>
-              <CardList cards={later} />
-            </>
-          )}
-        </>
-      )}
-
-      <p role="status" className="sr-only">
-        {statusText}
-      </p>
+            {later.length > 0 && (
+              <>
+                <h3 className="mt-8 text-base font-semibold">Later this week</h3>
+                <CardList cards={later} />
+              </>
+            )}
+          </>
+        )}
+      </div>
+      <StatusLine text={statusText} />
     </div>
+  );
+}
+
+/**
+ * The screen-reader status for both views. Both views have the same shape (one
+ * <div>, then this line) so React keeps the same element when loading ends and
+ * only its text changes. VoiceOver announces a change in an existing live
+ * region, but stayed silent when the result was a new element (Oct 26 audit).
+ */
+function StatusLine({ text }: { text: string }) {
+  return (
+    <p role="status" className="sr-only">
+      {text}
+    </p>
   );
 }

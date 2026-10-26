@@ -10,16 +10,23 @@ import type { PassCardModel } from "@/lib/plainPass";
 export default function PassCard({ card }: { card: PassCardModel }) {
   return (
     <article className="rounded-xl border border-line bg-surface p-4">
-      <div className="flex items-baseline justify-between gap-3 text-sm">
+      {/* Screen readers get this row from the heading and the line after it. */}
+      <div aria-hidden="true" className="flex items-baseline justify-between gap-3 text-sm">
         <p className="font-semibold uppercase tracking-wide text-accent">
           {card.dayLabel} · {card.satellite}
         </p>
-        <p className="shrink-0 text-muted">
-          <span className="sr-only">Visible for </span>
-          {card.duration}
-        </p>
+        <p className="shrink-0 text-muted">{card.duration}</p>
       </div>
-      <p className="mt-1 text-xl font-semibold leading-snug text-ink">{card.headline}</p>
+      {/* A heading, so VoiceOver users can jump pass to pass (VO+Cmd+H or the
+          rotor's headings list); h4 under "Tonight" / "Later this week" (h3)
+          and under Ask Phoebe's group headings (h3). */}
+      <h4 className="mt-1 text-xl font-semibold leading-snug text-ink">
+        <span className="sr-only">
+          {card.dayLabel}, {card.satellite}:{" "}
+        </span>
+        {card.headline}
+      </h4>
+      <p className="sr-only">Visible for {card.duration}.</p>
       <p className="mt-2 text-base font-medium text-ink">{card.viewing}</p>
       <p className="mt-2 text-base leading-relaxed text-muted">{card.path}</p>
       {card.caution && (
@@ -32,7 +39,14 @@ export default function PassCard({ card }: { card: PassCardModel }) {
       )}
       <details className="mt-2">
         <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted hover:text-ink">
-          Exact times and directions
+          <span>
+            Exact times and directions
+            {/* Five toggles named alike are hard to tell apart when tabbing. */}
+            <span className="sr-only">
+              {" "}
+              for {card.satellite} at {card.time}
+            </span>
+          </span>
         </summary>
         <dl className="space-y-1 pb-1 text-sm">
           {card.details.map((row) => (
