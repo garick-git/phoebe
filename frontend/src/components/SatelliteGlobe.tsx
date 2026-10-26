@@ -192,11 +192,16 @@ export default function SatelliteGlobe() {
   const [orbit, setOrbit] = useState<OrbitInfo | null>(null);
   // The last positions received, so a filter change can redraw while paused.
   const latestRef = useRef<{ packed: Float32Array; time: number } | null>(null);
-  // The slot is in the page's pre-rendered HTML, so it exists before this
-  // client-only component first renders.
-  const [searchSlot] = useState(() => document.getElementById(GLOBE_SEARCH_SLOT_ID));
-  const [detailSlot] = useState(() => document.getElementById(GLOBE_DETAIL_SLOT_ID));
-  const [peekSlot] = useState(() => document.getElementById(GLOBE_PEEK_SLOT_ID));
+  // The page's slots for the search box, details and the sheet's name, looked
+  // up on every render, never stored once. On a first visit this chunk loads
+  // after the page, so the slots exist; but coming back from another page the
+  // chunk is cached and React renders this component in the same pass as the
+  // page, before the slots are in the DOM (a stored lookup stayed null, and
+  // the search box never appeared; Oct 26). Every portal below waits for data
+  // from the worker, which always arrives in a later render, after the slots exist.
+  const searchSlot = document.getElementById(GLOBE_SEARCH_SLOT_ID);
+  const detailSlot = document.getElementById(GLOBE_DETAIL_SLOT_ID);
+  const peekSlot = document.getElementById(GLOBE_PEEK_SLOT_ID);
   // WCAG 2.2.2 (Pause, Stop, Hide): moving content needs a pause control.
   // People who ask their system for reduced motion start paused.
   const [playing, setPlaying] = useState(() => !prefersReducedMotion());
