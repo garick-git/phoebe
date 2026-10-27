@@ -24,9 +24,10 @@ function Section({ id, title, children }: { id: string; title: string; children:
 
 /**
  * About: how it works, how a pass is judged visible and how that was checked,
- * credits (attribution required by Open-Meteo and GeoNames, CC BY 4.0), and
- * the privacy note. Every claim here must stay true: numbers come from the
- * project's measured results, not estimates.
+ * credits (attribution required by Open-Meteo and GeoNames, CC BY 4.0), the
+ * privacy note, and who made it (links only, no email on the page). Every
+ * claim here must stay true: numbers come from the project's measured results,
+ * not estimates.
  */
 export default function AboutPage() {
   return (
@@ -146,6 +147,21 @@ export default function AboutPage() {
           </li>
           <li>Predictions checked against Heavens-Above.</li>
         </ul>
+      </Section>
+
+      <Section id="maker" title="Who made Phoebe">
+        <p>
+          Phoebe was built by Garick Mendez, a software engineer in Austin, Texas. Feedback is
+          welcome: reach me through the contact form on{" "}
+          <a href="https://www.garickm.com/#contact" className={linkClass}>
+            garickm.com
+          </a>
+          , or browse the{" "}
+          <a href="https://github.com/garick-git/phoebe" className={linkClass}>
+            source code on GitHub
+          </a>
+          .
+        </p>
       </Section>
     </div>
   );
