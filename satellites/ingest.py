@@ -54,7 +54,9 @@ def element_set_fields(record):
     }
 
 
+# atomic transaction (all or nothing)
 @transaction.atomic
+# upserts records
 def ingest_records(records):
     """Upsert satellites and add any new element sets. Returns counts."""
     # One record per satellite, in case the feed ever repeats one.

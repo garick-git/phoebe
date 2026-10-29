@@ -1,6 +1,7 @@
 from django.db import models
 
 
+# daily budget. 1 row per day
 class DailyUsage(models.Model):
     """What Ask Phoebe used on one UTC day: one row per day, shared by every
     Gunicorn worker and thread (the throttles' counts live in each worker's
