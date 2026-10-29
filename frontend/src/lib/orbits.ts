@@ -136,7 +136,8 @@ export const PACKED_STRIDE = 4;
  * Float32 keeps about 7 significant digits: about 1 m of latitude/longitude.
  */
 export function packedPositionsAt(satellites: TrackedSatellite[], date: Date): Float32Array {
-  const gmst = gstime(date);
+  // gstime: Earth's rotation angle. Same for every satellite. 
+  const gmst = gstime(date); 
   const packed = new Float32Array(satellites.length * PACKED_STRIDE);
   for (let i = 0; i < satellites.length; i++) {
     const geo = geodeticAt(satellites[i].satrec, date, gmst);

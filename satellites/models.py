@@ -25,13 +25,13 @@ class SatelliteQuerySet(models.QuerySet):
         newest stamp. Satellites that dropped out of CelesTrak's active list
         keep an older stamp and drop out here. One SQL query (a subquery).
         """
-        newest = (
-            self.model.objects.order_by(F("last_seen_at").desc(nulls_last=True))
-            .values("last_seen_at")[:1]
-        )
+        newest = self.model.objects.order_by(
+            F("last_seen_at").desc(nulls_last=True)
+        ).values("last_seen_at")[:1]
         return self.filter(last_seen_at=Subquery(newest))
 
 
+# identity table
 class Satellite(models.Model):
     norad_cat_id = models.PositiveIntegerField(unique=True)
     name = models.CharField(max_length=100)
@@ -51,6 +51,7 @@ class Satellite(models.Model):
         return f"{self.name} ({self.norad_cat_id})"
 
 
+# the orbit at one moment
 class OrbitalElementSet(models.Model):
     satellite = models.ForeignKey(
         Satellite, on_delete=models.PROTECT, related_name="element_sets"
