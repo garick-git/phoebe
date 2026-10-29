@@ -28,6 +28,7 @@ function send(message: FromWorker, transfer: Transferable[] = []) {
 self.addEventListener("message", async (event: MessageEvent<ToWorker>) => {
   const message = event.data;
 
+  // download orbital elements for all satellites
   if (message.type === "load") {
     try {
       const response = await fetch(message.url);
@@ -45,6 +46,7 @@ self.addEventListener("message", async (event: MessageEvent<ToWorker>) => {
     return;
   }
 
+  // compute SGP4 prediction model for every satellite, every second. 
   if (message.type === "compute") {
     const start = performance.now();
     const positions = packedPositionsAt(satellites, new Date(message.time));
@@ -55,6 +57,7 @@ self.addEventListener("message", async (event: MessageEvent<ToWorker>) => {
     return;
   }
 
+  // on satellite click, compute the orbit path
   if (message.type === "orbit") {
     const satellite = satellites[message.index];
     if (!satellite) return;
