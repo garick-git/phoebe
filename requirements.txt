@@ -1,6 +1,6 @@
 anyio==4.15.1
 asgiref==3.12.1
-certifi==2026.10.19
+certifi==2026.10.23
 Django==6.1.2
 djangorestframework==3.18.3
 gunicorn==26.2.0
@@ -8,9 +8,9 @@ h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1
 idna==3.20
-iniconfig==2.3.0
+iniconfig==2.3.1
 jplephem==2.24
-numpy==2.5.3
+numpy==2.5.4
 packaging==26.3
 pluggy==1.6.0
 psycopg==3.3.6
@@ -18,11 +18,11 @@ psycopg-binary==3.3.6
 Pygments==2.21.0
 pytest==9.1.1
 pytest-django==4.14.0
-ruff==0.17.1
+ruff==0.17.3
 sentry-sdk==2.73.0
 sgp4==2.27
 skyfield==1.55
-sqlparse==0.6.0
+sqlparse==0.6.1
 typing_extensions==4.16.0
 urllib3==2.8.0
 whitenoise==6.12.0
